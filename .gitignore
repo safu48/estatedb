@@ -16,3 +16,5 @@ env/
 *.swp
 .DS_Store
 Thumbs.db
+.neon
+node_modules/
