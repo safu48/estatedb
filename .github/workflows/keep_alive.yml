@@ -1,0 +1,15 @@
+name: Keep Alive
+
+on:
+  schedule:
+    # Run every 10 minutes to keep Render free tier awake
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Render Web Service
+        run: |
+          curl -s -f -m 30 https://estatedb.onrender.com/health || curl -s -f -m 30 https://estatedb.onrender.com/

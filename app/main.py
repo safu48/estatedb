@@ -62,6 +62,12 @@ app.include_router(admin.router)
 app.include_router(showcase.router)
 
 
+@app.get("/health")
+async def health_check():
+    """Lightweight health check endpoint for uptime monitors."""
+    return {"status": "ok"}
+
+
 @app.middleware("http")
 async def database_guard(request: Request, call_next):
     """Short-circuit every page with setup help while the database is down.
