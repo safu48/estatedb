@@ -4,6 +4,8 @@ A full-stack property-listing web application (FastAPI + Jinja2 + PostgreSQL via
 
 **14 tables · 9 triggers · 4 views · 4 stored functions · 2 stored procedures · 11 indexes · 235 seed rows**
 
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/safu48/estatedb)
+
 ---
 
 ## Contents
