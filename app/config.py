@@ -50,7 +50,8 @@ class Settings:
         """Return the PostgreSQL connection string with SSL parameters if configured."""
         if self._db_url:
             url = self._db_url
-            if self.DB_SSL and "sslmode" not in url:
+            is_cloud = any(cloud in url for cloud in ("neon.tech", "supabase.co", "render.com", "aivencloud.com"))
+            if (is_cloud or self.DB_SSL) and "sslmode" not in url:
                 delim = "&" if "?" in url else "?"
                 url = f"{url}{delim}sslmode=require"
             return url
