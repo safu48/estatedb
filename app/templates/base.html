@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}EstateDB{% endblock %} &middot; EstateDB</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="icon" href="/static/img/prop-01.svg" type="image/svg+xml">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap bar">
+    <a class="brand" href="/">
+      <span class="brand-mark">ED</span>
+      <span>EstateDB<small>PostgreSQL &middot; Render</small></span>
+    </a>
+
+    <nav class="nav">
+      <a href="/"         class="{{ 'active' if current_path == '/' }}">Home</a>
+      <a href="/listings" class="{{ 'active' if current_path.startswith('/listings') }}">Properties</a>
+      <a href="/agents"   class="{{ 'active' if current_path.startswith('/agents') }}">Agents</a>
+      <a href="/market"   class="{{ 'active' if current_path == '/market' }}">Market Report</a>
+      {% if user %}
+        <a href="/database" class="{{ 'active' if current_path == '/database' }}">SQL Showcase</a>
+        {% if user.role == 'Admin' %}
+          <a href="/admin" class="{{ 'active' if current_path.startswith('/admin') }}">Admin</a>
+        {% elif user.role == 'Agent' %}
+          <a href="/agent" class="{{ 'active' if current_path.startswith('/agent/') or current_path == '/agent' }}">Agent Desk</a>
+        {% else %}
+          <a href="/me" class="{{ 'active' if current_path.startswith('/me') }}">My Profile</a>
+        {% endif %}
+      {% endif %}
+    </nav>
+
+    <div class="nav-user">
+      {% if user %}
+        <div class="avatar">{{ user.full_name[:1]|upper }}</div>
+        <div class="who">
+          <b>{{ user.full_name }}</b>
+          <span>{{ user.role|status_label }}</span>
+        </div>
+        <a href="/logout" class="btn btn-sm btn-ghost">Sign Out</a>
+      {% else %}
+        <a href="/login" class="btn btn-sm btn-ghost">Sign In</a>
+        <a href="/register" class="btn btn-sm btn-accent">Register</a>
+      {% endif %}
+    </div>
+  </div>
+</header>
+
+{% block hero %}{% endblock %}
+
+<main class="{% block main_class %}wrap page{% endblock %}">
+  {% if notice %}
+    <div class="alert alert-good">
+      <span class="icon">&#10003;</span>
+      <div>{{ notice }}</div>
+      <button type="button" class="btn-link" data-dismiss style="margin-left:auto">Dismiss</button>
+    </div>
+  {% endif %}
+  {% if error %}
+    <div class="alert alert-bad">
+      <span class="icon">&#9888;</span>
+      <div>{{ error }}</div>
+      <button type="button" class="btn-link" data-dismiss style="margin-left:auto">Dismiss</button>
+    </div>
+  {% endif %}
+
+  {% block content %}{% endblock %}
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="cols">
+      <div>
+        <a class="brand" href="/">
+          <span class="brand-mark">ED</span>
+          <span>EstateDB</span>
+        </a>
+        <p class="mt2" style="max-width:44ch">
+          A full-stack real estate web application built on PostgreSQL:
+          14 tables, triggers, views, stored procedures, and functions powered by FastAPI.
+        </p>
+      </div>
+      <div>
+        <h4>Browse</h4>
+        <ul>
+          <li><a href="/listings">All Properties</a></li>
+          <li><a href="/listings?listing_type=SALE">For Sale</a></li>
+          <li><a href="/listings?listing_type=RENT">For Rent</a></li>
+          <li><a href="/listings?featured=1">Featured Listings</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Explore</h4>
+        <ul>
+          <li><a href="/agents">Agent Directory</a></li>
+          <li><a href="/market">Market Statistics</a></li>
+          {% if user %}<li><a href="/database">SQL Showcase</a></li>{% endif %}
+        </ul>
+      </div>
+      <div>
+        <h4>Account</h4>
+        <ul>
+          {% if user %}
+            <li><a href="/me">My Profile</a></li>
+            <li><a href="/logout">Sign Out</a></li>
+          {% else %}
+            <li><a href="/login">Sign In</a></li>
+            <li><a href="/register">Register</a></li>
+          {% endif %}
+        </ul>
+      </div>
+    </div>
+    <div class="legal">
+      <span>University Database Project &middot; Demonstration Data</span>
+      <span>FastAPI &middot; Jinja2 &middot; Psycopg 3 &middot; PostgreSQL</span>
+    </div>
+  </div>
+</footer>
+
+<script src="/static/js/app.js"></script>
+</body>
+</html>

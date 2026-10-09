@@ -1,0 +1,1 @@
+"""EstateDB application package."""

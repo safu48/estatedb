@@ -1,0 +1,299 @@
+{% extends "base.html" %}
+{% from "_macros.html" import empty, stat, bar %}
+{% block title %}Reference Lookups &middot; Admin Console{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Reference Lookups &amp; Catalog Data</h1>
+    <p class="sub">
+      Core lookup tables: cities, property types, and amenities. Add new catalog records easily while foreign key constraints prevent accidental deletion of referenced data.
+    </p>
+  </div>
+  <nav class="tabs">
+    <a href="/admin">Dashboard</a>
+    <a href="/admin/users">Users</a>
+    <a href="/admin/properties">Properties</a>
+    <a href="/admin/transactions">Transactions</a>
+    <a href="/admin/inquiries">Inquiries</a>
+    <a class="on" href="/admin/lookups">Lookups</a>
+    <a href="/admin/audit">Audit Log</a>
+  </nav>
+</div>
+
+<div class="grid grid-4 mb3">
+  {{ stat("Cities", cities|length,
+          cities|rejectattr('property_count')|list|length ~ " with zero listings") }}
+  {{ stat("Property Types", types|length, "Active in catalog", "accent") }}
+  {{ stat("Amenities", amenities|length,
+          unused|length ~ " unassigned", "good") }}
+  {{ stat("Amenity Links",
+          amenities|map(attribute='usage_count')|map('int')|sum,
+          "property_amenities rows", "warn") }}
+</div>
+
+<!-- ================================================================ cities -->
+<section class="card mb3">
+  <div class="card-head">
+    <h2>Cities</h2>
+    <span class="hint">v_city_stats</span>
+  </div>
+
+  <div class="table-wrap">
+    <table class="data">
+      <thead>
+        <tr>
+          <th>#</th><th>City</th><th>State / Division</th><th class="num">Listings</th>
+          <th class="num">Available</th><th class="num">Min Price</th>
+          <th class="num">Avg Price</th><th class="num">Max Price</th><th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in cities %}
+        <tr>
+          <td class="faint">{{ c.city_id }}</td>
+          <td><b>{{ c.city_name }}</b></td>
+          <td class="small">{{ c.state }}</td>
+          <td class="num">
+            {% if c.property_count|int %}
+              <a href="/admin/properties?city_id={{ c.city_id }}">{{ c.property_count }}</a>
+            {% else %}
+              <span class="faint">0</span>
+            {% endif %}
+          </td>
+          <td class="num">{{ c.available_count }}</td>
+          <td class="num small">{{ c.min_price|money_short if c.min_price else '--' }}</td>
+          <td class="num">{{ c.avg_price|money_short if c.avg_price else '--' }}</td>
+          <td class="num small">{{ c.max_price|money_short if c.max_price else '--' }}</td>
+          <td>
+            <form method="post" action="/admin/lookups/city/{{ c.city_id }}/delete"
+                  class="inline-form">
+              <button class="btn btn-sm {{ 'btn-danger' if not c.property_count|int else 'btn-ghost' }}"
+                      data-confirm="Delete city {{ c.city_name }}?">
+                Delete
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card-foot">
+    Deleting a city with active listings triggers MySQL Error 1451:
+    <pre class="sql">Error 1451: Cannot delete or update a parent row: a foreign key constraint fails
+(`estatedb`.`properties`, CONSTRAINT `fk_prop_city` FOREIGN KEY (`city_id`) REFERENCES `cities` (`city_id`))</pre>
+    Foreign key constraints defined at the schema level prevent orphaned property records.
+  </div>
+</section>
+
+<div class="grid grid-2 mb3">
+  <!-- ---------------------------------------------------------- add city -->
+  <section class="card">
+    <div class="card-head">
+      <h2>Add New City</h2>
+      <span class="hint">AUTO_INCREMENT primary key</span>
+    </div>
+    <form method="post" action="/admin/lookups/city">
+      <div class="card-body">
+        <div class="field-row">
+          <div class="field">
+            <label for="city_name">City Name *</label>
+            <input id="city_name" name="city_name" required maxlength="60"
+                   placeholder="e.g. Khulna">
+          </div>
+          <div class="field">
+            <label for="state">State / Division *</label>
+            <input id="state" name="state" required maxlength="40"
+                   placeholder="e.g. Khulna Division">
+          </div>
+        </div>
+        <div class="field">
+          <label for="country">Country</label>
+          <input id="country" name="country" value="Bangladesh" maxlength="40">
+        </div>
+        <button class="btn btn-accent">Add City</button>
+      </div>
+    </form>
+    <div class="card-foot">
+      <code>UNIQUE (city_name, state)</code> constraint prevents duplicate cities within the same division.
+    </div>
+  </section>
+
+  <!-- --------------------------------------------------------- add type -->
+  <section class="card">
+    <div class="card-head">
+      <h2>Property Types</h2>
+      <span class="hint">{{ types|length }} configured</span>
+    </div>
+    <div class="table-wrap">
+      <table class="data">
+        <thead><tr><th>Type</th><th class="num">Listings</th>
+                   <th class="num">Avg Price</th></tr></thead>
+        <tbody>
+          {% for t in types %}
+          <tr>
+            <td><b>{{ t.type_name }}</b></td>
+            <td class="num">
+              {% if t.property_count|int %}
+                <a href="/admin/properties?type_id={{ t.type_id }}">{{ t.property_count }}</a>
+              {% else %}
+                <span class="faint">0</span>
+              {% endif %}
+            </td>
+            <td class="num">{{ t.avg_price|money_short if t.avg_price else '--' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        {% if types %}
+          <tfoot>
+            <tr class="total-row">
+              <td>All Types</td>
+              <td class="num">{{ types|map(attribute='property_count')|map('int')|sum }}</td>
+              <td class="num"></td>
+            </tr>
+          </tfoot>
+        {% endif %}
+      </table>
+    </div>
+    <form method="post" action="/admin/lookups/type">
+      <div class="card-body">
+        <div class="field">
+          <label for="type_name">New Property Type *</label>
+          <input id="type_name" name="type_name" required maxlength="50"
+                 placeholder="e.g. Duplex Villa">
+        </div>
+        <button class="btn btn-accent btn-sm">Add Type</button>
+      </div>
+    </form>
+    <div class="card-foot">
+      Every listing must reference a valid property type. <code>LEFT JOIN</code> preserves zero-count types in catalog reports.
+    </div>
+  </section>
+</div>
+
+<!-- ============================================================= amenities -->
+<div class="grid grid-detail">
+  <section class="card">
+    <div class="card-head">
+      <h2>Amenities</h2>
+      <span class="hint">Computed across junction table</span>
+    </div>
+
+    {% if amenities %}
+      <div class="card-body">
+        {% set peak = amenities|map(attribute='usage_count')|map('int')|list|max %}
+        <div class="bars">
+          {% for a in amenities %}
+            {{ bar(a.amenity_name, a.usage_count|int, peak, a.usage_count|int,
+                   '' if a.usage_count|int else 'bad') }}
+          {% endfor %}
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="data">
+          <thead><tr><th>#</th><th>Amenity</th><th class="num">Usage Count</th>
+                     <th>Actions</th></tr></thead>
+          <tbody>
+            {% for a in amenities %}
+            <tr class="{{ 'row-off' if not a.usage_count|int }}">
+              <td class="faint">{{ a.amenity_id }}</td>
+              <td>{{ a.amenity_name }}</td>
+              <td class="num">
+                {{ a.usage_count }} listings
+              </td>
+              <td>
+                <form method="post"
+                      action="/admin/lookups/amenity/{{ a.amenity_id }}/delete"
+                      class="inline-form">
+                  <button class="btn btn-sm {{ 'btn-danger' if not a.usage_count|int else 'btn-ghost' }}"
+                          data-confirm="Delete amenity {{ a.amenity_name }}?">
+                    Delete
+                  </button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="card-body">{{ empty("No amenities configured.") }}</div>
+    {% endif %}
+
+    <form method="post" action="/admin/lookups/amenity">
+      <div class="card-body">
+        <div class="field">
+          <label for="amenity_name">New Amenity *</label>
+          <input id="amenity_name" name="amenity_name" required maxlength="50"
+                 placeholder="e.g. Solar Panels">
+        </div>
+        <button class="btn btn-accent btn-sm">Add Amenity</button>
+      </div>
+    </form>
+
+    <div class="card-foot">
+      <pre class="sql">SELECT a.amenity_id, a.amenity_name,
+       COUNT(pa.property_id) AS usage_count
+  FROM amenities a
+  LEFT JOIN property_amenities pa
+       ON pa.amenity_id = a.amenity_id
+ GROUP BY a.amenity_id, a.amenity_name
+ ORDER BY usage_count DESC, a.amenity_name</pre>
+      Using <code>COUNT(pa.property_id)</code> ensures unassigned amenities return 0 instead of counting NULLs.
+    </div>
+  </section>
+
+  <!-- --------------------------------------------------------- aside ---- -->
+  <div class="stack">
+    <section class="card">
+      <div class="card-head">
+        <h2>Unused Amenities</h2>
+        <span class="hint">NOT IN subquery</span>
+      </div>
+      <div class="card-body">
+        {% if unused %}
+          <div class="stack">
+            {% for a in unused %}
+              <div class="between small">
+                <span>{{ a.amenity_name }}</span>
+                <form method="post"
+                      action="/admin/lookups/amenity/{{ a.amenity_id }}/delete"
+                      class="inline-form">
+                  <button class="btn btn-sm btn-danger"
+                          data-confirm="Delete {{ a.amenity_name }}?">Delete</button>
+                </form>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          {{ empty("All amenities are currently assigned to at least one property.", "&#10003;") }}
+        {% endif %}
+      </div>
+      <div class="card-foot">
+        <pre class="sql">WHERE amenity_id NOT IN (
+  SELECT amenity_id
+    FROM property_amenities
+)</pre>
+        These amenities can be safely removed because no property references them.
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h3>Why Use Reference Tables?</h3></div>
+      <div class="card-body">
+        <p class="mb2">
+          Storing raw text would allow typos and inconsistent naming to pollute catalog reports.
+        </p>
+        <p class="mb0">
+          Normalizing into dedicated lookup tables with foreign key IDs guarantees high data integrity, consistent filtering, and optimal index performance.
+        </p>
+      </div>
+      <div class="card-foot">
+        <b>Many-to-many relationship:</b> Handled via the <code>property_amenities</code> junction table with a composite primary key.
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

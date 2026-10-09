@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% from "_macros.html" import empty %}
+{% block title %}Agents{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Agent Directory</h1>
+    <p class="sub">
+      Aggregated statistics sourced directly from the <code>v_agent_performance</code> view.
+    </p>
+  </div>
+  <form method="get" action="/agents" data-autosubmit style="min-width:220px">
+    <select name="sort" aria-label="Sort agents">
+      <option value="sales"    {{ 'selected' if sort == 'sales' }}>Sort by Sales Volume</option>
+      <option value="rating"   {{ 'selected' if sort == 'rating' }}>Sort by Rating</option>
+      <option value="listings" {{ 'selected' if sort == 'listings' }}>Sort by Listings Count</option>
+      <option value="name"     {{ 'selected' if sort == 'name' }}>Sort by Name</option>
+    </select>
+  </form>
+</div>
+
+{% if rows %}
+  <div class="grid grid-cards">
+    {% for a in rows %}
+      <section class="card">
+        <div class="card-body">
+          <div class="agent-box mb2">
+            <span class="avatar">{{ a.agent_name[:1]|upper }}</span>
+            <div style="min-width:0">
+              <h3 class="mb0"><a href="/agents/{{ a.agent_id }}">{{ a.agent_name }}</a></h3>
+              <div class="small muted">{{ a.agency_name or 'Independent Agent' }}</div>
+            </div>
+          </div>
+
+          <div class="mb2">
+            <span class="stars">{{ a.avg_rating|stars }}</span>
+            <span class="small muted">
+              {% if a.review_count %}
+                {{ a.avg_rating }} ({{ a.review_count }} reviews)
+              {% else %}
+                No reviews yet
+              {% endif %}
+            </span>
+          </div>
+
+          <div class="spec-grid">
+            <div><div class="k">Listings</div><div class="v">{{ a.total_listings }}</div></div>
+            <div><div class="k">Closed Deals</div><div class="v">{{ a.closed_listings }}</div></div>
+            <div><div class="k">Total Sales</div><div class="v">{{ a.total_sales_value|money_short }}</div></div>
+            <div><div class="k">Commission</div><div class="v">{{ a.commission_rate }}%</div></div>
+          </div>
+        </div>
+        <div class="card-foot between">
+          <span class="small faint">Joined: {{ a.hire_date|datefmt('%b %Y') }}</span>
+          <a href="/listings?agent_id={{ a.agent_id }}" class="btn btn-sm btn-ghost">
+            View Listings
+          </a>
+        </div>
+      </section>
+    {% endfor %}
+  </div>
+
+  <!-- same data, table form, so the numbers can be compared side by side -->
+  <section class="card mt3">
+    <div class="card-head">
+      <h2>Comparative Performance</h2>
+      <span class="hint">ORDER BY whitelisted safely</span>
+    </div>
+    <div class="table-wrap">
+      <table class="data">
+        <thead>
+          <tr>
+            <th>Agent</th><th>Agency</th>
+            <th class="num">Listings</th><th class="num">Closed</th>
+            <th class="num">Sales Volume</th><th class="num">Commission</th>
+            <th class="num">Rate</th><th>Rating</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in rows %}
+          <tr>
+            <td><a href="/agents/{{ a.agent_id }}">{{ a.agent_name }}</a></td>
+            <td class="muted">{{ a.agency_name or '--' }}</td>
+            <td class="num">{{ a.total_listings }}</td>
+            <td class="num">{{ a.closed_listings }}</td>
+            <td class="num">{{ a.total_sales_value|money }}</td>
+            <td class="num">{{ a.total_commission|money }}</td>
+            <td class="num">{{ a.commission_rate }}%</td>
+            <td class="nowrap">
+              <span class="stars">{{ a.avg_rating|stars }}</span>
+              <span class="tiny faint">({{ a.review_count }})</span>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <caption>
+          closed_listings counts properties with SOLD or RENTED status;
+          total_commission is accumulated by the transaction trigger.
+        </caption>
+      </table>
+    </div>
+  </section>
+{% else %}
+  <div class="card">{{ empty("No agents registered yet.") }}</div>
+{% endif %}
+{% endblock %}

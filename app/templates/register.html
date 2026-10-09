@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Create Account{% endblock %}
+{% block main_class %}wrap page narrow{% endblock %}
+
+{% set f = form|default({}, true) %}
+
+{% block content %}
+<div class="auth-card">
+  <div class="card">
+    <div class="card-head">
+      <h1 class="mb0">Create Customer Account</h1>
+    </div>
+    <form method="post" action="/register">
+      <div class="card-body">
+
+        <div class="field">
+          <label for="full_name">Full Name</label>
+          <input id="full_name" name="full_name" required autofocus
+                 value="{{ f.full_name or '' }}" autocomplete="name">
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="username">Username</label>
+            <input id="username" name="username" required
+                   value="{{ f.username or '' }}" autocomplete="username">
+            <div class="help">Must be unique across all accounts.</div>
+          </div>
+          <div class="field">
+            <label for="phone">Phone <span class="faint">(Optional)</span></label>
+            <input id="phone" name="phone" value="{{ f.phone or '' }}"
+                   autocomplete="tel" placeholder="01711000000">
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="email">Email Address</label>
+          <input id="email" name="email" type="email" required
+                 value="{{ f.email or '' }}" autocomplete="email">
+          <div class="help">Must be unique -- protected by UNIQUE constraint.</div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password" required
+                   minlength="6" autocomplete="new-password">
+          </div>
+          <div class="field">
+            <label for="confirm_password">Confirm Password</label>
+            <input id="confirm_password" name="confirm_password" type="password"
+                   required minlength="6" autocomplete="new-password">
+          </div>
+        </div>
+
+        <button class="btn btn-accent btn-block btn-lg">Create Account</button>
+      </div>
+    </form>
+    <div class="card-foot center">
+      Already have an account? <a href="/login">Sign In</a>.
+    </div>
+  </div>
+
+  <section class="card mt2">
+    <div class="card-head"><h2>Database Actions on Submit</h2></div>
+    <div class="card-body">
+      <ol class="steps">
+        <li>Password is salted and hashed with PBKDF2 -- plain text is never stored or logged.</li>
+        <li>An <code>INSERT</code> into <code>users</code> resolves <code>role_id</code> via subquery
+            (<code>SELECT role_id FROM roles WHERE role_name = 'Customer'</code>).</li>
+        <li>PostgreSQL assigns the next surrogate primary key using <code>SERIAL</code>.</li>
+        <li><code>RETURNING user_id</code> returns the generated primary key to Python.</li>
+        <li>An <code>AFTER INSERT</code> trigger writes an audit trail into <code>audit_log</code>.</li>
+        <li><code>UNIQUE</code> constraints enforce uniqueness at the database engine level.</li>
+      </ol>
+    </div>
+    <div class="card-foot">
+      Public signups always receive the <b>Customer</b> role. Agents and Admin accounts are provisioned via the Admin Console.
+    </div>
+  </section>
+</div>
+{% endblock %}

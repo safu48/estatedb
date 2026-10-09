@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}My Profile{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>My Profile</h1>
+    <p class="sub">
+      Two distinct <code>UPDATE</code> statements: one for profile details, one for credentials. Neither touches the other's columns.
+    </p>
+  </div>
+  <nav class="tabs">
+    <a href="/me">Overview</a>
+    <a href="/me/favorites">Saved Properties</a>
+    <a href="/me/inquiries">Inquiries</a>
+    <a href="/me/reviews">My Reviews</a>
+    <a class="on" href="/me/profile">Profile</a>
+  </nav>
+</div>
+
+<div class="grid grid-detail">
+
+  <div class="stack">
+    <!-- ------------------------------------------------------- details -->
+    <section class="card">
+      <div class="card-head">
+        <h2>Personal Information</h2>
+        <span class="hint">UPDATE users</span>
+      </div>
+      <form method="post" action="/me/profile">
+        <div class="card-body">
+          <div class="field">
+            <label for="full_name">Full Name</label>
+            <input id="full_name" name="full_name" required
+                   value="{{ profile.full_name }}" autocomplete="name">
+          </div>
+
+          <div class="field-row">
+            <div class="field">
+              <label for="email">Email Address</label>
+              <input id="email" name="email" type="email" required
+                     value="{{ profile.email }}" autocomplete="email">
+              <div class="help">Unique across all registered accounts.</div>
+            </div>
+            <div class="field">
+              <label for="phone">Phone Number</label>
+              <input id="phone" name="phone" value="{{ profile.phone or '' }}"
+                     autocomplete="tel">
+            </div>
+          </div>
+
+          <div class="field">
+            <label>Username</label>
+            <input value="{{ profile.username }}" disabled>
+            <div class="help">
+              Username is immutable and serves as your account handle.
+            </div>
+          </div>
+
+          <button class="btn btn-accent">Save Changes</button>
+        </div>
+      </form>
+      <div class="card-foot">
+        Duplicate email attempts are caught by the <code>UNIQUE</code> constraint and reported clearly.
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------ password -->
+    <section class="card">
+      <div class="card-head">
+        <h2>Change Password</h2>
+        <span class="hint">PBKDF2, 100,000 iterations</span>
+      </div>
+      <form method="post" action="/me/password">
+        <div class="card-body">
+          <div class="field">
+            <label for="current_password">Current Password</label>
+            <input id="current_password" name="current_password" type="password"
+                   required autocomplete="current-password">
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="new_password">New Password</label>
+              <input id="new_password" name="new_password" type="password"
+                     required minlength="6" autocomplete="new-password">
+            </div>
+            <div class="field">
+              <label for="confirm_password">Confirm New Password</label>
+              <input id="confirm_password" name="confirm_password" type="password"
+                     required minlength="6" autocomplete="new-password">
+            </div>
+          </div>
+          <button class="btn">Update Password</button>
+        </div>
+      </form>
+      <div class="card-foot">
+        Existing password is verified against stored hash with a new random salt generated on change.
+      </div>
+    </section>
+  </div>
+
+  <!-- ----------------------------------------------------------- aside -->
+  <div class="stack">
+    <section class="card">
+      <div class="card-head"><h3>Account Summary</h3></div>
+      <div class="card-body">
+        <div class="agent-box mb2">
+          <span class="avatar lg">{{ profile.full_name[:1]|upper }}</span>
+          <div style="min-width:0">
+            <b>{{ profile.full_name }}</b>
+            <div class="small muted">{{ profile.username }}</div>
+          </div>
+        </div>
+        <table class="data">
+          <tbody>
+            <tr><td>Role</td>
+                <td><span class="badge {{ profile.role_name|status_class }}">
+                  {{ profile.role_name }}</span></td></tr>
+            <tr><td>Status</td>
+                <td>
+                  {% if profile.is_active == 'Y' %}
+                    <span class="badge badge-good">Active</span>
+                  {% else %}
+                    <span class="badge badge-bad">Inactive</span>
+                  {% endif %}
+                </td></tr>
+            <tr><td>User ID</td><td class="mono">{{ profile.user_id }}</td></tr>
+            <tr><td>Joined</td><td>{{ profile.created_at|datefmt }}</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card-foot">
+        <code>is_active</code> is a <code>CHAR(1)</code> protected by
+        <code>CHECK (is_active IN ('Y','N'))</code>.
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h3>Password Storage Security</h3></div>
+      <div class="card-body small">
+        <table class="data">
+          <tbody>
+            <tr><td>Algorithm</td><td class="mono">PBKDF2-HMAC-SHA256</td></tr>
+            <tr><td>Iterations</td><td class="mono">100,000</td></tr>
+            <tr><td>Salt</td><td class="mono">16 random bytes per user</td></tr>
+            <tr><td>Key Length</td><td class="mono">32 bytes, hex-encoded</td></tr>
+            <tr><td>Comparison</td><td class="mono">hmac.compare_digest</td></tr>
+          </tbody>
+        </table>
+        <p class="mb0 mt2">
+          Plain passwords are never stored or logged. The <code>users</code> table stores only
+          <code>password_hash</code> and <code>password_salt</code>.
+        </p>
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

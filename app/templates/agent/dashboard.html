@@ -1,0 +1,258 @@
+{% extends "base.html" %}
+{% from "_macros.html" import empty, stat, bar %}
+{% block title %}Agent Desk{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>{{ me.agent_name }}'s Desk</h1>
+    <p class="sub">
+      {{ me.agency_name or 'Independent Agent' }} &middot;
+      License: {{ me.license_no }} &middot;
+      Commission: {{ me.commission_rate }}%
+    </p>
+  </div>
+  <nav class="tabs">
+    <a class="on" href="/agent">Overview</a>
+    <a href="/agent/properties">Properties</a>
+    <a href="/agent/inquiries">Inbox</a>
+    <a href="/agent/sales">Transactions</a>
+    <a href="/agent/profile">Profile</a>
+  </nav>
+</div>
+
+<div class="grid grid-4 mb3">
+  {{ stat("Total Listings", me.total_listings|num, "Properties assigned") }}
+  {{ stat("Closed Deals", me.closed_listings|num, "Sold or Rented", "good") }}
+  {{ stat("Total Sales Volume", me.total_sales_value|money_short,
+          "Total transacted value", "accent") }}
+  {{ stat("Commission Earned", me.total_commission|money_short,
+          "Calculated via triggers", "warn") }}
+</div>
+
+<div class="grid grid-detail">
+
+  <!-- ============================================================== left -->
+  <div class="stack">
+
+    <!-- inbox preview -->
+    <section class="card">
+      <div class="card-head">
+        <h2>Recent Inquiries</h2>
+        <a href="/agent/inquiries" class="hint">Open Inbox</a>
+      </div>
+      {% if inquiries %}
+        <div class="table-wrap">
+          <table class="data">
+            <thead>
+              <tr><th>Customer</th><th>Property</th><th>Received</th>
+                  <th>Tour Request</th><th>Status</th><th>Action</th></tr>
+            </thead>
+            <tbody>
+              {% for i in inquiries %}
+              <tr>
+                <td>
+                  <b>{{ i.customer_name }}</b>
+                  <div class="tiny faint">{{ i.customer_phone or i.customer_email }}</div>
+                </td>
+                <td>
+                  <a href="/property/{{ i.property_id }}">{{ i.title|truncate_words(5) }}</a>
+                  <div class="tiny faint">{{ i.price|money_short }}</div>
+                </td>
+                <td class="nowrap">{{ i.created_at|datefmt }}</td>
+                <td class="nowrap">
+                  {{ i.preferred_date|datefmt if i.preferred_date else '--' }}
+                </td>
+                <td><span class="badge {{ i.status|status_class }}">{{ i.status|status_label }}</span></td>
+                <td class="right">
+                  {% if i.status == 'NEW' %}
+                    <form method="post" action="/agent/inquiries/{{ i.inquiry_id }}/status"
+                          class="inline-form">
+                      <input type="hidden" name="status" value="CONTACTED">
+                      <button class="btn btn-sm">Mark Contacted</button>
+                    </form>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="card-body">{{ empty("No inquiries received yet.") }}</div>
+      {% endif %}
+      <div class="card-foot">
+        Ordered by custom <code>CASE</code> ranking so new inquiries appear at the top.
+      </div>
+    </section>
+
+    <!-- listings -->
+    <section class="card">
+      <div class="card-head">
+        <h2>Your Property Listings</h2>
+        <a href="/agent/properties" class="hint">Manage ({{ listings|length }})</a>
+      </div>
+      {% if listings %}
+        <div class="table-wrap">
+          <table class="data">
+            <thead>
+              <tr><th>#</th><th>Title</th><th>City</th>
+                  <th class="num">Price</th><th>Offer</th><th>Status</th>
+                  <th class="num">Saves</th></tr>
+            </thead>
+            <tbody>
+              {% for p in listings[:8] %}
+              <tr>
+                <td class="faint">{{ p.property_id }}</td>
+                <td><a href="/property/{{ p.property_id }}">{{ p.title|truncate_words(6) }}</a></td>
+                <td>{{ p.city_name }}</td>
+                <td class="num">{{ p.price|money }}</td>
+                <td><span class="badge {{ p.listing_type|status_class }}">
+                    {{ 'For Sale' if p.listing_type == 'SALE' else 'For Rent' }}</span></td>
+                <td><span class="badge {{ p.status|status_class }}">{{ p.status|status_label }}</span></td>
+                <td class="num">{{ p.favorite_count }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="card-body">
+          {{ empty("You have no active listings.") }}
+          <p class="center mb0">
+            <a href="/agent/properties/new" class="btn btn-accent btn-sm">
+              Add First Listing
+            </a>
+          </p>
+        </div>
+      {% endif %}
+    </section>
+
+    <!-- deals -->
+    <section class="card">
+      <div class="card-head">
+        <h2>Recent Closed Deals</h2>
+        <a href="/agent/sales" class="hint">Record Transaction</a>
+      </div>
+      {% if transactions %}
+        <div class="table-wrap">
+          <table class="data">
+            <thead>
+              <tr><th>#</th><th>Property</th><th>Buyer</th><th>Date</th>
+                  <th>Type</th><th class="num">Price</th>
+                  <th class="num">Commission</th></tr>
+            </thead>
+            <tbody>
+              {% for t in transactions[:6] %}
+              <tr>
+                <td class="faint">{{ t.transaction_id }}</td>
+                <td>{{ t.property_title|truncate_words(5) }}</td>
+                <td>{{ t.buyer_name }}</td>
+                <td class="nowrap">{{ t.txn_date|datefmt }}</td>
+                <td><span class="badge {{ t.txn_type|status_class }}">{{ 'For Sale' if t.txn_type == 'SALE' else 'For Rent' }}</span></td>
+                <td class="num">{{ t.sale_price|money }}</td>
+                <td class="num">{{ t.commission_amount|money }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+            {% if transactions %}
+              <tfoot>
+                <tr class="total-row">
+                  <td colspan="5">Total {{ transactions|length }} Deals</td>
+                  <td class="num">
+                    {{ transactions|map(attribute='sale_price')|map('float')|sum|money }}
+                  </td>
+                  <td class="num">
+                    {{ transactions|map(attribute='commission_amount')|map('float')|sum|money }}
+                  </td>
+                </tr>
+              </tfoot>
+            {% endif %}
+          </table>
+        </div>
+      {% else %}
+        <div class="card-body">{{ empty("No closed transactions recorded yet.") }}</div>
+      {% endif %}
+      <div class="card-foot">
+        Commission calculated automatically by <code>trg_txn_commission</code> in a <code>BEFORE INSERT</code> trigger.
+      </div>
+    </section>
+  </div>
+
+  <!-- ============================================================= right -->
+  <div class="stack">
+
+    <section class="card">
+      <div class="card-head"><h3>Inquiries by Status</h3>
+        <span class="hint">GROUP BY</span></div>
+      <div class="card-body">
+        {% if inquiry_counts %}
+          {% set peak = inquiry_counts|map(attribute='status_count')|map('int')|list|max %}
+          <div class="bars">
+            {% for c in inquiry_counts %}
+              {{ bar(c.status|status_label, c.status_count|int, peak, c.status_count|int,
+                     'bad' if c.status == 'NEW' else
+                     ('accent' if c.status == 'CONTACTED' else
+                     ('good' if c.status == 'SCHEDULED' else ''))) }}
+            {% endfor %}
+          </div>
+        {% else %}
+          {{ empty("Inbox is empty.") }}
+        {% endif %}
+      </div>
+      <div class="card-foot">
+        <a href="/agent/inquiries?status=NEW">Filter New Leads &rarr;</a>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h3>Client Ratings</h3>
+        <span class="hint">{{ me.review_count }} reviews</span></div>
+      <div class="card-body">
+        <div class="center mb2">
+          <div class="stars" style="font-size:1.4rem">{{ me.avg_rating|stars }}</div>
+          <div class="small muted">
+            {% if me.review_count %}
+              {{ me.avg_rating }} out of 5
+            {% else %}
+              No reviews yet
+            {% endif %}
+          </div>
+        </div>
+        <div class="stack">
+          {% for r in reviews %}
+            <div class="review">
+              <div class="between">
+                <b class="small">{{ r.customer_name }}</b>
+                <span class="stars">{{ r.rating|stars }}</span>
+              </div>
+              {% if r.comments %}
+                <p class="small mb0 mt1">{{ r.comments|truncate_words(20) }}</p>
+              {% endif %}
+            </div>
+          {% else %}
+            {{ empty("No client reviews yet.", "&#9734;") }}
+          {% endfor %}
+        </div>
+      </div>
+      <div class="card-foot">
+        <a href="/agents/{{ me.agent_id }}">View Your Public Profile &rarr;</a>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h3>Quick Actions</h3></div>
+      <div class="card-body stack" style="gap:8px">
+        <a href="/agent/properties/new" class="btn btn-accent btn-block">
+          Add New Property
+        </a>
+        <a href="/agent/sales" class="btn btn-ghost btn-block">Record Transaction</a>
+        <a href="/agent/inquiries?status=NEW" class="btn btn-ghost btn-block">
+          Respond to New Leads
+        </a>
+        <a href="/agent/profile" class="btn btn-ghost btn-block">Edit Profile</a>
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

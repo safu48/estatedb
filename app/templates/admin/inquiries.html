@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+{% from "_macros.html" import empty, stat, bar %}
+{% block title %}All Inquiries &middot; Admin Console{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>All Inquiries &amp; Leads</h1>
+    <p class="sub">
+      System-wide inquiry registry. Connects customer, agent, and property across 5 table references with <code>users</code> aliased twice in a single SQL query.
+    </p>
+  </div>
+  <nav class="tabs">
+    <a href="/admin">Dashboard</a>
+    <a href="/admin/users">Users</a>
+    <a href="/admin/properties">Properties</a>
+    <a href="/admin/transactions">Transactions</a>
+    <a class="on" href="/admin/inquiries">Inquiries</a>
+    <a href="/admin/lookups">Lookups</a>
+    <a href="/admin/audit">Audit Log</a>
+  </nav>
+</div>
+
+{% set by_status = {} %}
+{% for c in counts %}{% set _ = by_status.update({c.status: c.status_count}) %}{% endfor %}
+{% set total = counts|map(attribute='status_count')|map('int')|sum %}
+
+<div class="grid grid-4 mb3">
+  {{ stat("New", by_status.get('NEW', 0), "Awaiting initial contact",
+          "bad" if by_status.get('NEW', 0) else "") }}
+  {{ stat("Contacted", by_status.get('CONTACTED', 0), "Agent in discussion", "accent") }}
+  {{ stat("Scheduled", by_status.get('SCHEDULED', 0), "Tour date confirmed", "good") }}
+  {{ stat("Closed", by_status.get('CLOSED', 0), "Inquiry finalized", "warn") }}
+</div>
+
+<div class="grid grid-detail">
+
+  <!-- =============================================================== left -->
+  <div class="stack">
+    <section class="card">
+      <div class="card-head">
+        <h2>{{ total|num }} Total Inquiries</h2>
+        <span class="hint">Newest first</span>
+      </div>
+
+      {% if rows %}
+        <div class="table-wrap">
+          <table class="data">
+            <thead>
+              <tr>
+                <th>#</th><th>Customer</th><th>Property</th><th>Agent</th>
+                <th>Message</th><th>Received</th><th>Preferred Tour Date</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for i in rows %}
+              <tr>
+                <td class="faint">{{ i.inquiry_id }}</td>
+                <td class="small"><b>{{ i.customer_name }}</b></td>
+                <td class="small">{{ i.property_title|truncate_words(6) }}</td>
+                <td class="small">{{ i.agent_name }}</td>
+                <td class="small muted">{{ i.message|truncate_words(14) }}</td>
+                <td class="nowrap small">{{ i.created_at|datefmt }}</td>
+                <td class="nowrap small">
+                  {% if i.preferred_date %}
+                    {{ i.preferred_date|datefmt }}
+                  {% else %}
+                    <span class="faint">No date specified</span>
+                  {% endif %}
+                </td>
+                <td>
+                  <span class="badge {{ i.status|status_class }}">{{ i.status|status_label }}</span>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="card-foot">
+          <pre class="sql">FROM inquiries i
+JOIN properties p  ON p.property_id = i.property_id
+JOIN users      cu ON cu.user_id    = i.customer_id
+JOIN agents     a  ON a.agent_id    = p.agent_id
+JOIN users      ag ON ag.user_id    = a.agent_id</pre>
+          <code>users</code> is joined twice under distinct aliases (customer and agent). The agent relationship is resolved via <code>properties.agent_id</code> to avoid redundant foreign keys.
+        </div>
+      {% else %}
+        <div class="card-body">{{ empty("No inquiries received yet.") }}</div>
+      {% endif %}
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Deliberately Read-Only for Administrators</h2>
+        <span class="hint">Administrative oversight</span>
+      </div>
+      <div class="card-body">
+        <p class="mb2">
+          Administrators can monitor every lead across the platform but do not reply directly. Lead communications belong to the assigned agent's desk to maintain clear accountability.
+        </p>
+        <p class="mb0">
+          The primary purpose of this screen is <b>pipeline oversight</b>: identifying dormant 'NEW' inquiries and balancing agent workloads.
+        </p>
+      </div>
+      <div class="card-foot">
+        Enforced by <code>CHECK (status IN ('NEW','CONTACTED','SCHEDULED','CLOSED'))</code> and stored procedure <code>sp_update_inquiry_status</code>.
+      </div>
+    </section>
+  </div>
+
+  <!-- ============================================================== right -->
+  <div class="stack">
+    <section class="card">
+      <div class="card-head">
+        <h2>Inquiries by Status</h2>
+        <span class="hint">GROUP BY</span>
+      </div>
+      <div class="card-body">
+        {% if counts %}
+          {% set peak = counts|map(attribute='status_count')|map('int')|list|max %}
+          <div class="bars">
+            {% for s, tone in [('NEW', 'bad'), ('CONTACTED', 'accent'),
+                               ('SCHEDULED', 'good'), ('CLOSED', 'warn')] %}
+              {{ bar(s|status_label, by_status.get(s, 0)|int, peak,
+                     by_status.get(s, 0)|int, tone) }}
+            {% endfor %}
+          </div>
+        {% else %}
+          {{ empty("No inquiry data available.") }}
+        {% endif %}
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h3>Conversion Metrics</h3></div>
+      <div class="card-body">
+        {% set closed = by_status.get('CLOSED', 0)|int %}
+        {% set booked = by_status.get('SCHEDULED', 0)|int %}
+        {% set untouched = by_status.get('NEW', 0)|int %}
+        <table class="data">
+          <tbody>
+            <tr>
+              <td>Toured / Closed Rate</td>
+              <td class="num">
+                {{ ((booked + closed) / total * 100)|round(1) if total else 0 }}%
+              </td>
+            </tr>
+            <tr>
+              <td>Awaiting Response</td>
+              <td class="num {{ 'delta-down' if untouched }}">
+                {{ (untouched / total * 100)|round(1) if total else 0 }}%
+              </td>
+            </tr>
+            <tr>
+              <td>Avg Inquiries per Listing</td>
+              <td class="num">
+                {{ (total / (rows|map(attribute='property_title')|unique|list|length))|round(2)
+                   if rows else 0 }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h3>Management Shortcuts</h3></div>
+      <div class="card-body">
+        <div class="stack">
+          <a href="/admin/users?role=AGENT" class="btn btn-ghost btn-block">
+            View Agents &amp; Workload
+          </a>
+          <a href="/admin/properties?status=AVAILABLE" class="btn btn-ghost btn-block">
+            View Available Listings
+          </a>
+          <a href="/admin/audit?action=UPDATE" class="btn btn-ghost btn-block">
+            View Audit Status Changes
+          </a>
+        </div>
+      </div>
+      <div class="card-foot">
+        Inquiry status transitions trigger <code>trg_inquiries_audit</code> to log updates in <code>audit_log</code>.
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

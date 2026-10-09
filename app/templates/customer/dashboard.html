@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+{% from "_macros.html" import prop_card, empty, stat %}
+{% block title %}My Account{% endblock %}
+
+{% block content %}
+{# property_id comes back as a NUMBER, so normalise before the `in` test #}
+{% set saved_ids = favorites|map(attribute='property_id')|map('int')|list %}
+<div class="page-head">
+  <div>
+    <h1>Welcome, {{ user.full_name.split()[0] }}</h1>
+    <p class="sub">
+      Your saved properties, active inquiries, and agent reviews at a glance.
+    </p>
+  </div>
+  <nav class="tabs">
+    <a class="on" href="/me">Overview</a>
+    <a href="/me/favorites">Saved Properties</a>
+    <a href="/me/inquiries">Inquiries</a>
+    <a href="/me/reviews">My Reviews</a>
+    <a href="/me/profile">Profile</a>
+  </nav>
+</div>
+
+<div class="grid grid-4 mb3">
+  {{ stat("Saved Properties", favorites|length, "favorites table") }}
+  {{ stat("Inquiries Sent", inquiries|length, "inquiries table", "accent") }}
+  {{ stat("Active Inquiries",
+          inquiries|rejectattr('status', 'equalto', 'CLOSED')|list|length,
+          "In progress", "warn") }}
+  {{ stat("Reviews Given", reviews|length, "reviews table", "good") }}
+</div>
+
+<div class="grid grid-detail">
+
+  <!-- =========================================================== left col -->
+  <div class="stack">
+
+    <!-- inquiries -->
+    <section class="card">
+      <div class="card-head">
+        <h2>Recent Inquiries</h2>
+        <a href="/me/inquiries" class="hint">View All ({{ inquiries|length }})</a>
+      </div>
+      {% if inquiries %}
+        <div class="table-wrap">
+          <table class="data">
+            <thead>
+              <tr><th>Property</th><th>Agent</th><th>Date Sent</th>
+                  <th>Tour Date</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+              {% for i in inquiries[:5] %}
+              <tr>
+                <td>
+                  <a href="/property/{{ i.property_id }}">{{ i.title|truncate_words(6) }}</a>
+                  <div class="tiny faint">{{ i.city_name }} &middot; {{ i.price|money_short }}</div>
+                </td>
+                <td>{{ i.agent_name }}
+                    <div class="tiny faint">{{ i.agent_phone or '' }}</div></td>
+                <td class="nowrap">{{ i.created_at|datefmt }}</td>
+                <td class="nowrap">{{ i.preferred_date|datefmt if i.preferred_date else '--' }}</td>
+                <td><span class="badge {{ i.status|status_class }}">{{ i.status|status_label }}</span></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="card-body">
+          {{ empty("You have not sent any property inquiries yet.") }}
+          <p class="center mb0"><a href="/listings" class="btn btn-sm">Find Properties</a></p>
+        </div>
+      {% endif %}
+      <div class="card-foot">
+        Inquiry status defaults to <code>'NEW'</code> and transitions via agent actions.
+      </div>
+    </section>
+
+    <!-- saved -->
+    <section>
+      <div class="between mb2">
+        <h2 class="mb0">Saved Properties</h2>
+        <a href="/me/favorites" class="btn btn-sm btn-ghost">View All</a>
+      </div>
+      {% if favorites %}
+        <div class="grid grid-cards">
+          {% for p in favorites[:3] %}
+            {{ prop_card(p, saved_ids, user, "/me") }}
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="card">
+          {{ empty("No saved properties yet. Click the heart icon on any listing to save it.", "&#10084;") }}
+        </div>
+      {% endif %}
+    </section>
+
+    <!-- recommendations -->
+    <section>
+      <div class="between mb2">
+        <h2 class="mb0">Recommended in Your Favorite Cities</h2>
+        <span class="hint">IN + NOT EXISTS</span>
+      </div>
+      {% if recommendations %}
+        <div class="grid grid-cards">
+          {% for p in recommendations %}
+            {{ prop_card(p, saved_ids, user, "/me") }}
+          {% endfor %}
+        </div>
+        <p class="small muted mt2">
+          Available properties in cities you saved, excluding already favorited listings via <code>NOT EXISTS</code>.
+        </p>
+      {% else %}
+        <div class="card">
+          {{ empty("Save properties to receive personalized city recommendations.") }}
+        </div>
+      {% endif %}
+    </section>
+  </div>
+
+  <!-- ========================================================== right col -->
+  <div class="stack">
+
+    <section class="card">
+      <div class="card-head"><h2>Account Details</h2>
+        <a href="/me/profile" class="hint">Edit Profile</a></div>
+      <div class="card-body">
+        {% if profile %}
+          <div class="agent-box mb2">
+            <span class="avatar lg">{{ profile.full_name[:1]|upper }}</span>
+            <div style="min-width:0">
+              <b>{{ profile.full_name }}</b>
+              <div class="small muted">{{ profile.username }}</div>
+              <span class="badge {{ profile.role_name|status_class }}">
+                {{ profile.role_name }}
+              </span>
+            </div>
+          </div>
+          <div class="small stack" style="gap:6px">
+            <div><span class="faint">Email:</span> {{ profile.email }}</div>
+            <div><span class="faint">Phone:</span> {{ profile.phone or '--' }}</div>
+            <div><span class="faint">Member Since:</span> {{ profile.created_at|datefmt }}</div>
+          </div>
+        {% endif %}
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Your Reviews</h2>
+        <a href="/me/reviews" class="hint">Manage</a>
+      </div>
+      <div class="card-body stack">
+        {% for r in reviews[:4] %}
+          <div class="review">
+            <div class="between">
+              <a href="/agents/{{ r.agent_id }}"><b>{{ r.agent_name }}</b></a>
+              <span class="stars">{{ r.rating|stars }}</span>
+            </div>
+            <div class="tiny faint">{{ r.review_date|datefmt }}</div>
+            {% if r.comments %}
+              <p class="small mb0 mt1">{{ r.comments|truncate_words(18) }}</p>
+            {% endif %}
+          </div>
+        {% else %}
+          {{ empty("You have not reviewed any agents yet.", "&#9734;") }}
+        {% endfor %}
+      </div>
+      <div class="card-foot">
+        One review per agent enforced by <code>UNIQUE</code> composite constraint.
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h3>Quick Navigation</h3></div>
+      <div class="card-body stack" style="gap:8px">
+        <a href="/listings" class="btn btn-ghost btn-block">Search Properties</a>
+        <a href="/agents" class="btn btn-ghost btn-block">Agent Directory</a>
+        <a href="/market" class="btn btn-ghost btn-block">Market Statistics</a>
+        <a href="/database" class="btn btn-ghost btn-block">SQL Showcase</a>
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

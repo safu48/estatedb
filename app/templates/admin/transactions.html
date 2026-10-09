@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+{% from "_macros.html" import empty, stat %}
+{% block title %}Transactions &middot; Admin Console{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Transactions &amp; Sales Report</h1>
+    <p class="sub">
+      Detailed audit log of completed transactions comparing original list price against agreed price. Price variances are calculated inline within the SQL query.
+    </p>
+  </div>
+  <nav class="tabs">
+    <a href="/admin">Dashboard</a>
+    <a href="/admin/users">Users</a>
+    <a href="/admin/properties">Properties</a>
+    <a class="on" href="/admin/transactions">Transactions</a>
+    <a href="/admin/inquiries">Inquiries</a>
+    <a href="/admin/lookups">Lookups</a>
+    <a href="/admin/audit">Audit Log</a>
+  </nav>
+</div>
+
+{% set volume = rows|map(attribute='sale_price')|map('float')|sum if rows else 0 %}
+{% set fees = rows|map(attribute='commission_amount')|map('float')|sum if rows else 0 %}
+{% set overs = rows|selectattr('price_difference')|selectattr('price_difference', 'gt', 0)|list %}
+{% set unders = rows|selectattr('price_difference')|selectattr('price_difference', 'lt', 0)|list %}
+
+<div class="grid grid-4 mb3">
+  {{ stat("Closed Deals", rows|length, "Transactions table rows") }}
+  {{ stat("Total Volume", volume|money_short, "Total transaction volume", "accent") }}
+  {{ stat("Total Commission", fees|money_short,
+          (fees / volume * 100)|round(2) ~ "% of sales" if volume else "--", "good") }}
+  {{ stat("Average Deal", (volume / rows|length)|money_short if rows else '--',
+          "Average transaction value", "warn") }}
+</div>
+
+<!-- =========================================================== deal history -->
+<section class="card mb3">
+  <div class="card-head">
+    <h2>Transaction History</h2>
+    <span class="hint">4-table JOIN query</span>
+  </div>
+
+  {% if rows %}
+    <div class="table-wrap">
+      <table class="data">
+        <thead>
+          <tr>
+            <th>#</th><th>Property</th><th>City</th><th>Buyer</th><th>Agent</th>
+            <th>Date</th><th>Type</th>
+            <th class="num">List Price</th><th class="num">Agreed Price</th>
+            <th class="num">Difference</th><th class="num">Commission</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in rows %}
+          <tr>
+            <td class="faint">{{ t.transaction_id }}</td>
+            <td><a href="/property/{{ t.property_id }}">
+                {{ t.property_title|truncate_words(6) }}</a></td>
+            <td class="small">{{ t.city_name }}</td>
+            <td class="small">{{ t.buyer_name }}</td>
+            <td class="small">{{ t.agent_name }}</td>
+            <td class="nowrap small">{{ t.txn_date|datefmt }}</td>
+            <td><span class="badge {{ t.txn_type|status_class }}">{{ 'For Sale' if t.txn_type == 'SALE' else 'For Rent' }}</span></td>
+            <td class="num faint">{{ t.list_price|money }}</td>
+            <td class="num">{{ t.sale_price|money }}</td>
+            <td class="num">
+              {% if t.price_difference is none or t.price_difference|float == 0 %}
+                <span class="faint">At Asking Price</span>
+              {% elif t.price_difference|float > 0 %}
+                <span class="delta-up">&#9650; {{ t.price_difference|money }}</span>
+              {% else %}
+                <span class="delta-down">&#9660; {{ (t.price_difference|float * -1)|money }}</span>
+              {% endif %}
+            </td>
+            <td class="num">{{ t.commission_amount|money }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr class="total-row">
+            <td colspan="8">Total: {{ rows|length }} deals</td>
+            <td class="num">{{ volume|money }}</td>
+            <td class="num">
+              {% if overs or unders %}
+                {{ overs|length }} above / {{ unders|length }} below asking
+              {% endif %}
+            </td>
+            <td class="num">{{ fees|money }}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    <div class="card-foot">
+      Four tables joined in a single statement: <code>transactions</code> joined with <code>properties</code>, <code>cities</code>, and <code>users</code> twice (once as buyer, once as listing agent). Inline difference calculated via <code>sale_price - p.price AS price_difference</code>.
+    </div>
+  {% else %}
+    <div class="card-body">{{ empty("No transactions completed yet.") }}</div>
+  {% endif %}
+</section>
+
+<div class="grid grid-2">
+  <!-- ================================================= month over month -->
+  <section class="card">
+    <div class="card-head">
+      <h2>Month-over-Month Growth</h2>
+      <span class="hint">LAG and cumulative SUM</span>
+    </div>
+    {% if monthly %}
+      <div class="card-body">
+        {% set peak = monthly|map(attribute='revenue')|map('float')|list|max %}
+        <div class="cols">
+          {% for m in monthly %}
+            <div class="col">
+              <span class="amt">{{ m.revenue|money_short }}</span>
+              <span class="stem"
+                    style="height: {{ ((m.revenue|float) / peak * 100)|round|int if peak else 0 }}%"></span>
+              <span class="cap">{{ m.sales_month[-2:] }}/{{ m.sales_month[2:4] }}</span>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="data">
+          <thead>
+            <tr><th>Month</th><th class="num">Deals</th><th class="num">Revenue</th>
+                <th class="num">Change</th><th class="num">Running Total</th></tr>
+          </thead>
+          <tbody>
+            {% for m in monthly %}
+            <tr>
+              <td>{{ m.sales_month }}</td>
+              <td class="num">{{ m.deal_count }}</td>
+              <td class="num">{{ m.revenue|money }}</td>
+              <td class="num">
+                {% if m.prev_revenue is none %}
+                  <span class="faint">First month</span>
+                {% elif m.revenue_change is none or m.revenue_change|float == 0 %}
+                  <span class="faint">Stable</span>
+                {% elif m.revenue_change|float > 0 %}
+                  <span class="delta-up">&#9650; {{ m.revenue_change|abs|money }}{% if m.revenue_change_pct is not none %} ({{ m.revenue_change_pct|abs }}%){% endif %}</span>
+                {% else %}
+                  <span class="delta-down">&#9660; {{ m.revenue_change|abs|money }}{% if m.revenue_change_pct is not none %} ({{ m.revenue_change_pct|abs }}%){% endif %}</span>
+                {% endif %}
+              </td>
+              <td class="num">{{ m.running_revenue|money }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="card-foot">
+        <code>LAG(SUM(sale_price)) OVER (ORDER BY month)</code> evaluates month-over-month variations directly on aggregated sales.
+      </div>
+    {% else %}
+      <div class="card-body">{{ empty("No data available for chart.") }}</div>
+    {% endif %}
+  </section>
+
+  <!-- =========================================================== rollup -->
+  <section class="card">
+    <div class="card-head">
+      <h2>City Subtotals &amp; Breakdown</h2>
+      <span class="hint">ROLLUP + GROUPING</span>
+    </div>
+    {% if rollup %}
+      <div class="table-wrap">
+        <table class="data">
+          <thead>
+            <tr><th>City</th><th>Type</th><th class="num">Deals</th>
+                <th class="num">Revenue</th><th class="num">Commission</th></tr>
+          </thead>
+          <tbody>
+            {% for r in rollup %}
+              <tr class="{{ 'total-row' if r.is_type_total|int == 1 or r.is_city_total|int == 1 }}">
+                <td>
+                  {% if r.is_type_total|int == 1 %}<b>Grand Total</b>
+                  {% else %}{{ r.city_name }}{% endif %}
+                </td>
+                <td>
+                  {% if r.is_type_total|int == 1 %}
+                    <span class="faint">All cities</span>
+                  {% elif r.is_city_total|int == 1 %}
+                    <b>Subtotal</b>
+                  {% else %}
+                    <span class="badge {{ r.txn_type|status_class }}">{{ 'For Sale' if r.txn_type == 'SALE' else 'For Rent' }}</span>
+                  {% endif %}
+                </td>
+                <td class="num">{{ r.deal_count }}</td>
+                <td class="num">{{ r.revenue|money }}</td>
+                <td class="num">{{ r.commission|money }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="card-foot">
+        <code>GROUP BY ROLLUP(c.city_name, t.txn_type)</code> generates subtotals per city and the grand total in a single database pass.
+      </div>
+    {% else %}
+      <div class="card-body">{{ empty("No data available for rollup.") }}</div>
+    {% endif %}
+  </section>
+</div>
+
+<section class="card mt3">
+  <div class="card-head">
+    <h2>Database Execution Flow</h2>
+    <span class="hint">Computed inside MySQL &mdash; zero Python arithmetic</span>
+  </div>
+  <div class="table-wrap">
+    <table class="data">
+      <thead><tr><th>Field / Action</th><th>Managed By</th><th>Mechanism</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code>transaction_id</code></td>
+          <td><code>AUTO_INCREMENT</code></td>
+          <td class="small muted">MySQL supplies sequential primary keys automatically.</td>
+        </tr>
+        <tr>
+          <td><code>commission_amount</code></td>
+          <td><code>trg_txn_commission</code></td>
+          <td class="small muted">Trigger calculates amount using active agent commission rate.</td>
+        </tr>
+        <tr>
+          <td><code>txn_date</code></td>
+          <td class="muted">Column default</td>
+          <td class="small muted"><code>DEFAULT CURRENT_TIMESTAMP</code> from database server clock.</td>
+        </tr>
+        <tr>
+          <td><code>properties.status</code></td>
+          <td><code>sp_record_sale</code></td>
+          <td class="small muted">Atomically updated to SOLD or RENTED in the same transaction.</td>
+        </tr>
+        <tr>
+          <td><code>inquiries.status</code></td>
+          <td><code>sp_record_sale</code></td>
+          <td class="small muted">Open inquiries for this property are automatically closed.</td>
+        </tr>
+        <tr>
+          <td><code>audit_log</code></td>
+          <td class="muted">Triggers</td>
+          <td class="small muted">Audit records generated for all inserts and updates. <a href="/admin/audit">View Logs &rarr;</a></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="card-foot">
+    Closing a deal is handled through an atomic stored procedure, guaranteeing relational integrity.
+  </div>
+</section>
+{% endblock %}

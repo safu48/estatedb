@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% from "_macros.html" import empty, stat %}
+{% block title %}Inquiries Inbox &middot; Agent Desk{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Inquiries Inbox</h1>
+    <p class="sub">
+      Customer inquiries for your property listings. Status updates execute the database stored procedure <code>sp_update_inquiry_status</code>.
+    </p>
+  </div>
+  <nav class="tabs">
+    <a href="/agent">Overview</a>
+    <a href="/agent/properties">Properties</a>
+    <a class="on" href="/agent/inquiries">Inquiries</a>
+    <a href="/agent/sales">Sales</a>
+    <a href="/agent/profile">Profile</a>
+  </nav>
+</div>
+
+<!-- ------------------------------------------------------------ status tabs -->
+{% set by_status = {} %}
+{% for c in counts %}{% set _ = by_status.update({c.status: c.status_count}) %}{% endfor %}
+
+<div class="between mb3">
+  <nav class="tabs">
+    <a href="/agent/inquiries" class="{{ 'on' if not active_status }}">
+      All <span class="faint">{{ counts|map(attribute='status_count')|map('int')|sum }}</span>
+    </a>
+    {% for s in ['NEW', 'CONTACTED', 'SCHEDULED', 'CLOSED'] %}
+      <a href="/agent/inquiries?status={{ s }}"
+         class="{{ 'on' if active_status == s }}">
+        {{ s|status_label }} <span class="faint">{{ by_status.get(s, 0) }}</span>
+      </a>
+    {% endfor %}
+  </nav>
+  {% if active_status %}
+    <span class="chip">
+      Filter: {{ active_status|status_label }}
+      <a href="/agent/inquiries" title="Clear filter">&times;</a>
+    </span>
+  {% endif %}
+</div>
+
+{% if not active_status %}
+  <div class="grid grid-4 mb3">
+    {{ stat("New", by_status.get('NEW', 0), "Awaiting response", "bad") }}
+    {{ stat("Contacted", by_status.get('CONTACTED', 0), "In conversation", "accent") }}
+    {{ stat("Scheduled", by_status.get('SCHEDULED', 0), "Tour scheduled", "good") }}
+    {{ stat("Closed", by_status.get('CLOSED', 0), "Resolved", "warn") }}
+  </div>
+{% endif %}
+
+{% if rows %}
+  <div class="stack">
+    {% for i in rows %}
+      <section class="card">
+        <div class="card-head">
+          <div class="agent-box">
+            <span class="avatar">{{ i.customer_name[:1]|upper }}</span>
+            <div style="min-width:0">
+              <b>{{ i.customer_name }}</b>
+              <div class="tiny faint">
+                {{ i.customer_email }}
+                {% if i.customer_phone %} &middot; {{ i.customer_phone }}{% endif %}
+              </div>
+            </div>
+          </div>
+          <span class="badge {{ i.status|status_class }}">{{ i.status|status_label }}</span>
+        </div>
+
+        <div class="card-body">
+          <div class="grid grid-2">
+            <div>
+              <div class="small faint mb1">Customer Message</div>
+              <p class="mb0" style="white-space:pre-line">{{ i.message }}</p>
+            </div>
+            <div class="small stack" style="gap:8px">
+              <div>
+                <span class="faint">Property:</span>
+                <a href="/property/{{ i.property_id }}">{{ i.title }}</a>
+                <span class="faint">({{ i.price|money_short }})</span>
+              </div>
+              <div>
+                <span class="faint">Received:</span>
+                {{ i.created_at|datefmt('%d %b %Y, %H:%M') }}
+              </div>
+              <div>
+                <span class="faint">Preferred Tour Date:</span>
+                {% if i.preferred_date %}
+                  <b>{{ i.preferred_date|datefmt }}</b>
+                {% else %}
+                  <span class="faint">No date specified</span>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card-foot between">
+          <span class="small faint">Inquiry #{{ i.inquiry_id }}</span>
+          <span class="row-tight">
+            {% for s, label in [('CONTACTED', 'Mark Contacted'),
+                                ('SCHEDULED', 'Schedule Tour'),
+                                ('CLOSED', 'Close Inquiry')] %}
+              {% if i.status != s %}
+                <form method="post" action="/agent/inquiries/{{ i.inquiry_id }}/status"
+                      class="inline-form">
+                  <input type="hidden" name="status" value="{{ s }}">
+                  <button class="btn btn-sm {{ 'btn-ghost' if s == 'CLOSED' else '' }}">
+                    {{ label }}
+                  </button>
+                </form>
+              {% endif %}
+            {% endfor %}
+            <a href="mailto:{{ i.customer_email }}?subject=Your enquiry about {{ i.title }}"
+               class="btn btn-sm btn-ghost">Reply via Email</a>
+          </span>
+        </div>
+      </section>
+    {% endfor %}
+  </div>
+
+  <section class="card mt3">
+    <div class="card-head">
+      <h2>Stored Procedure Encapsulation</h2>
+      <span class="hint">sp_update_inquiry_status</span>
+    </div>
+    <div class="card-body">
+      <pre class="sql">CREATE PROCEDURE sp_update_inquiry_status (
+    IN p_inquiry_id INT,
+    IN p_status     VARCHAR(20)
+) ...</pre>
+      <p class="mb0 mt2">
+        Business logic validating inquiry status transitions is enforced at the database level. Calling this procedure ensures consistent behavior whether invoked via this web application, phpMyAdmin, or an external script.
+      </p>
+    </div>
+  </section>
+{% else %}
+  <div class="card">
+    {% if active_status %}
+      {{ empty("No inquiries found with status: " ~ active_status|status_label) }}
+      <div class="card-foot center">
+        <a href="/agent/inquiries" class="btn btn-ghost btn-sm">View All Inquiries</a>
+      </div>
+    {% else %}
+      {{ empty("No inquiries received yet for your listings.") }}
+      <div class="card-foot center">
+        <a href="/agent/properties" class="btn btn-ghost btn-sm">Manage Properties</a>
+      </div>
+    {% endif %}
+  </div>
+{% endif %}
+{% endblock %}

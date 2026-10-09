@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+{% from "_macros.html" import empty, stat %}
+{% block title %}User Accounts &middot; Admin Console{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>User Accounts</h1>
+    <p class="sub">
+      Overview of all user accounts and roles across EstateDB. Deactivating an account performs a soft delete to protect historical inquiries, reviews, and transaction records.
+    </p>
+  </div>
+  <nav class="tabs">
+    <a href="/admin">Dashboard</a>
+    <a class="on" href="/admin/users">Users</a>
+    <a href="/admin/properties">Properties</a>
+    <a href="/admin/transactions">Transactions</a>
+    <a href="/admin/inquiries">Inquiries</a>
+    <a href="/admin/lookups">Lookups</a>
+    <a href="/admin/audit">Audit Log</a>
+  </nav>
+</div>
+
+<div class="grid grid-4 mb3">
+  {% for r in role_counts %}
+    {{ stat(r.role_name ~ " Accounts", r.user_count,
+            (r.active_count or 0) ~ " active",
+            "accent" if r.role_name == 'AGENT' else
+            ("bad" if r.role_name == 'ADMIN' else "")) }}
+  {% endfor %}
+  {{ stat("Total Displayed", rows|length,
+          "Filtered by role" if active_role else "Across all roles", "good") }}
+</div>
+
+<!-- ----------------------------------------------------------- role filter -->
+<div class="between mb3">
+  <nav class="tabs">
+    <a href="/admin/users" class="{{ 'on' if not active_role }}">All Accounts</a>
+    {% for r in role_counts %}
+      <a href="/admin/users?role={{ r.role_name }}"
+         class="{{ 'on' if active_role == r.role_name }}">
+        {{ r.role_name|title }} <span class="faint">{{ r.user_count }}</span>
+      </a>
+    {% endfor %}
+  </nav>
+  <span class="row-tight">
+    <a href="/admin/agents/new" class="btn btn-sm btn-accent">+ Add New Agent</a>
+  </span>
+</div>
+
+<section class="card">
+  <div class="card-head">
+    <h2>{{ active_role|title ~ ' Accounts' if active_role else 'All Accounts' }}</h2>
+    <span class="hint">JOIN users with roles and correlated counts</span>
+  </div>
+
+  {% if rows %}
+    <div class="table-wrap">
+      <table class="data">
+        <thead>
+          <tr>
+            <th>#</th><th>Name</th><th>Username</th><th>Contact</th>
+            <th>Role</th><th class="num">Saved</th><th class="num">Inquiries</th>
+            <th>Joined</th><th>Status</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in rows %}
+          <tr class="{{ 'row-off' if u.is_active != 'Y' }}">
+            <td class="faint">{{ u.user_id }}</td>
+            <td>
+              <span class="agent-box">
+                <span class="avatar sm">{{ u.full_name[:1]|upper }}</span>
+                <b>{{ u.full_name }}</b>
+              </span>
+            </td>
+            <td class="mono small">{{ u.username }}</td>
+            <td class="small">
+              {{ u.email }}
+              {% if u.phone %}<div class="tiny faint">{{ u.phone }}</div>{% endif %}
+            </td>
+            <td>
+              <span class="badge {{ u.role_name|status_class }}">{{ u.role_name }}</span>
+            </td>
+            <td class="num">{{ u.favorite_count }}</td>
+            <td class="num">{{ u.inquiry_count }}</td>
+            <td class="nowrap small">{{ u.created_at|datefmt }}</td>
+            <td>
+              {% if u.is_active == 'Y' %}
+                <span class="badge badge-available">Active</span>
+              {% else %}
+                <span class="badge badge-sold">Inactive</span>
+              {% endif %}
+            </td>
+            <td class="nowrap">
+              {% if u.role_name == 'AGENT' %}
+                <a href="/agents/{{ u.user_id }}" class="btn btn-link btn-sm">Profile</a>
+              {% endif %}
+              {% if u.user_id|int == user.user_id|int %}
+                <span class="tiny faint">(Your account)</span>
+              {% else %}
+                <form method="post" action="/admin/users/{{ u.user_id }}/toggle"
+                      class="inline-form">
+                  <button class="btn btn-sm {{ 'btn-ghost' if u.is_active == 'Y' }}"
+                          {% if u.is_active == 'Y' %}
+                            data-confirm="Deactivate {{ u.full_name }}? They will no longer be able to log in.">
+                          {% else %}>{% endif %}
+                    {{ 'Deactivate' if u.is_active == 'Y' else 'Activate' }}
+                  </button>
+                </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="card-foot">
+      Saved and inquiry counts are computed using correlated subqueries in the SELECT clause.
+    </div>
+  {% else %}
+    <div class="card-body">
+      {{ empty("No accounts found for this role.") }}
+      <p class="center mb0"><a href="/admin/users" class="btn btn-ghost btn-sm">
+        View All Accounts</a></p>
+    </div>
+  {% endif %}
+</section>
+
+<div class="grid grid-2 mt3">
+  <section class="card">
+    <div class="card-head"><h3>Why Deactivation Replaces Deletion</h3></div>
+    <div class="card-body">
+      <p class="mb2">
+        A hard <code>DELETE FROM users WHERE user_id = 42</code> fails immediately if the user has saved listings, submitted inquiries, or completed deals &mdash; because 4 separate tables reference this primary key via foreign keys.
+      </p>
+      <pre class="sql">UPDATE users
+   SET is_active = 'N'
+ WHERE user_id = :id</pre>
+      <p class="mb0 mt2">
+        Updating the <code>CHAR(1)</code> flag revokes login access without corrupting relational integrity.
+      </p>
+    </div>
+    <div class="card-foot">
+      Protected by <code>CHAR(1)</code> and <code>CHECK (is_active IN ('Y','N'))</code> constraint.
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h3>Role Permissions</h3></div>
+    <div class="table-wrap">
+      <table class="data">
+        <thead><tr><th>Role</th><th>Allowed Capabilities</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="badge badge-sold">ADMIN</span></td>
+            <td class="small">Full administrative control: agent provisioning, universal listing management, lookup maintenance, and audit review.</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-pending">AGENT</span></td>
+            <td class="small">Manage assigned listings, handle direct inquiries, and close transactions.</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-available">CUSTOMER</span></td>
+            <td class="small">Save favorites, submit tour inquiries, post agent reviews, and update customer profile.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card-foot">
+      Roles are managed via the <code>roles</code> reference table with foreign key validation on <code>role_id</code>.
+    </div>
+  </section>
+</div>
+{% endblock %}

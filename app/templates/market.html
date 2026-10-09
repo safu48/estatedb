@@ -1,0 +1,315 @@
+{% extends "base.html" %}
+{% from "_macros.html" import empty, stat, bar %}
+{% block title %}Market Report & Statistics{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Market Statistics</h1>
+    <p class="sub">
+      Aggregations, grouping, and set-based reporting -- each table runs a live SQL statement on PostgreSQL.
+    </p>
+  </div>
+  <a href="/listings" class="btn btn-ghost">Back to Listings</a>
+</div>
+
+<!-- ==================================================== price bands (CASE) -->
+<section class="card mb3">
+  <div class="card-head">
+    <h2>Property Distribution by Price Band</h2>
+    <span class="hint">CASE inside GROUP BY</span>
+  </div>
+  <div class="card-body">
+    {% if price_bands %}
+      {% set peak = price_bands|map(attribute='property_count')|map('int')|list|max %}
+      <div class="cols">
+        {% for b in price_bands %}
+          <div class="col">
+            <span class="amt">{{ b.property_count }}</span>
+            <span class="stem"
+                  style="height: {{ ((b.property_count|int) / peak * 100)|round|int if peak else 0 }}%"></span>
+            <span class="cap">{{ b.price_band }}</span>
+          </div>
+        {% endfor %}
+      </div>
+
+      <div class="table-wrap mt3">
+        <table class="data">
+          <thead>
+            <tr>
+              <th>Price Band</th><th class="num">Properties</th>
+              <th class="num">Min Price</th><th class="num">Max Price</th>
+              <th class="num">Avg Area</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for b in price_bands %}
+            <tr>
+              <td><b>{{ b.price_band }}</b></td>
+              <td class="num">{{ b.property_count }}</td>
+              <td class="num">{{ b.band_min|money }}</td>
+              <td class="num">{{ b.band_max|money }}</td>
+              <td class="num">{{ b.avg_area|num }} sqft</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      {{ empty("No price bands defined yet.") }}
+    {% endif %}
+  </div>
+  <div class="card-foot">
+    Calculated using a <code>CASE</code> expression inside <code>GROUP BY</code> to bucket prices dynamically.
+  </div>
+</section>
+
+<!-- ====================================================== crosstab (PIVOT) -->
+<section class="card mb3">
+  <div class="card-head">
+    <h2>Property Status by Type (Crosstab)</h2>
+    <span class="hint">Conditional Aggregation (Pivot)</span>
+  </div>
+  <div class="table-wrap">
+    <table class="data">
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th class="num">Available</th><th class="num">Pending</th>
+          <th class="num">Sold</th><th class="num">Rented</th>
+          <th class="num">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in status_by_type %}
+        <tr>
+          <td><a href="/listings?type_id=&amp;keyword={{ r.type_name }}">{{ r.type_name }}</a></td>
+          <td class="num">{{ r.available }}</td>
+          <td class="num">{{ r.pending }}</td>
+          <td class="num">{{ r.sold }}</td>
+          <td class="num">{{ r.rented }}</td>
+          <td class="num"><b>{{ r.total }}</b></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      {% if status_by_type %}
+        <tfoot>
+          <tr class="total-row">
+            <td>Total</td>
+            <td class="num">{{ status_by_type|sum(attribute='available') }}</td>
+            <td class="num">{{ status_by_type|sum(attribute='pending') }}</td>
+            <td class="num">{{ status_by_type|sum(attribute='sold') }}</td>
+            <td class="num">{{ status_by_type|sum(attribute='rented') }}</td>
+            <td class="num">{{ status_by_type|sum(attribute='total') }}</td>
+          </tr>
+        </tfoot>
+      {% endif %}
+    </table>
+  </div>
+  <div class="card-foot">
+    PostgreSQL dynamic pivot created via conditional aggregation:
+    <code>SUM(CASE WHEN status = 'SOLD' THEN 1 ELSE 0 END)</code>.
+  </div>
+</section>
+
+<!-- ============================================================== by city -->
+<div class="grid grid-2 mb3">
+  <section class="card">
+    <div class="card-head"><h2>Properties by City</h2>
+      <span class="hint">v_city_stats</span></div>
+    <div class="card-body">
+      {% if city_stats %}
+        {% set peak = city_stats|map(attribute='property_count')|map('int')|list|max %}
+        <div class="bars">
+          {% for c in city_stats %}
+            {{ bar(c.city_name ~ ' (' ~ c.state ~ ')', c.property_count|int, peak,
+                   c.property_count|int) }}
+          {% endfor %}
+        </div>
+      {% else %}
+        {{ empty("No city stats available.") }}
+      {% endif %}
+    </div>
+    <div class="card-foot">
+      Built with <b>LEFT JOIN</b> so cities with 0 properties remain visible.
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>Average Price by City</h2>
+      <span class="hint">AVG / MIN / MAX</span></div>
+    <div class="table-wrap">
+      <table class="data">
+        <thead>
+          <tr>
+            <th>City</th><th class="num">Listings</th>
+            <th class="num">Available</th><th class="num">Avg Price</th>
+            <th class="num">Price Range</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in city_stats %}
+          <tr>
+            <td><a href="/listings?city_id={{ c.city_id }}">{{ c.city_name }}</a>
+                <span class="faint">({{ c.state }})</span></td>
+            <td class="num">{{ c.property_count }}</td>
+            <td class="num">{{ c.available_count }}</td>
+            <td class="num">{{ c.avg_price|money }}</td>
+            <td class="num tiny">
+              {% if c.min_price %}
+                {{ c.min_price|money_short }} &ndash; {{ c.max_price|money_short }}
+              {% else %}--{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<!-- ==================================== priciest per city (analytic funcs) -->
+<div class="grid grid-2 mb3">
+  <section class="card">
+    <div class="card-head">
+      <h2>Top Priced Property per City</h2>
+      <span class="hint">ROW_NUMBER() OVER (PARTITION BY)</span>
+    </div>
+    <div class="table-wrap">
+      <table class="data">
+        <thead>
+          <tr><th>City</th><th>Property</th><th class="num">Price</th><th class="num">Area</th></tr>
+        </thead>
+        <tbody>
+          {% for r in priciest %}
+          <tr>
+            <td>{{ r.city_name }} <span class="faint">({{ r.state }})</span></td>
+            <td><a href="/property/{{ r.property_id }}">{{ r.title|truncate_words(6) }}</a>
+                <div class="tiny faint">{{ r.bedrooms }} Beds</div></td>
+            <td class="num">{{ r.price|money }}</td>
+            <td class="num">{{ r.area_sqft|num }} sqft</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4">{{ empty("No properties found.") }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="card-foot">
+      Window function partitions rows by city; outer query selects <code>rn = 1</code> in a single pass.
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>Most Active Cities</h2>
+      <span class="hint">GROUP BY ... HAVING</span>
+    </div>
+    <div class="table-wrap">
+      <table class="data">
+        <thead>
+          <tr><th>City</th><th class="num">Listings</th>
+              <th class="num">Avg Price</th><th class="num">Max Price</th></tr>
+        </thead>
+        <tbody>
+          {% for r in busy_cities %}
+          <tr>
+            <td>{{ r.city_name }} <span class="faint">({{ r.state }})</span></td>
+            <td class="num">{{ r.listing_count }}</td>
+            <td class="num">{{ r.avg_price|money }}</td>
+            <td class="num">{{ r.top_price|money }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4">{{ empty("No cities with multiple listings yet.") }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="card-foot">
+      <code>HAVING COUNT(*) &gt;= 2</code> filters aggregated groups post-GROUP BY.
+    </div>
+  </section>
+</div>
+
+<!-- ================================================ types + amenities + fav -->
+<div class="grid grid-3">
+  <section class="card">
+    <div class="card-head"><h3>Property Types</h3></div>
+    <div class="table-wrap">
+      <table class="data">
+        <thead><tr><th>Type</th><th class="num">Count</th><th class="num">Avg Price</th></tr></thead>
+        <tbody>
+          {% for t in type_stats %}
+          <tr>
+            <td><a href="/listings?type_id={{ t.type_id }}">{{ t.type_name }}</a></td>
+            <td class="num">{{ t.property_count }}</td>
+            <td class="num">{{ t.avg_price|money_short }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h3>Popular Amenities</h3></div>
+    <div class="card-body">
+      {% if popular_amenities %}
+        {% set peak = popular_amenities|map(attribute='usage_count')|map('int')|list|max %}
+        <div class="bars">
+          {% for am in popular_amenities[:10] %}
+            {{ bar(am.amenity_name, am.usage_count|int, peak, am.usage_count|int, 'accent') }}
+          {% endfor %}
+        </div>
+      {% else %}
+        {{ empty("No amenities recorded.") }}
+      {% endif %}
+    </div>
+    <div class="card-foot">
+      Calculated from the <code>property_amenities</code> bridge table.
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h3>Most Saved Properties</h3></div>
+    <div class="card-body stack">
+      {% for f in most_favorited %}
+        <div class="between">
+          <div style="min-width:0">
+            <a href="/property/{{ f.property_id }}">{{ f.title|truncate_words(6) }}</a>
+            <div class="tiny faint">
+              {{ f.city_name }} &middot; {{ f.price|money_short }}
+              &middot; {{ 'For Sale' if f.listing_type == 'SALE' else 'For Rent' }}
+            </div>
+          </div>
+          <span class="chip">&#10084; {{ f.save_count }}</span>
+        </div>
+      {% else %}
+        {{ empty("No saved properties yet.", "&#10084;") }}
+      {% endfor %}
+    </div>
+    <div class="card-foot">
+      Ranked by row counts in the composite PK <code>favorites</code> table.
+    </div>
+  </section>
+</div>
+
+<section class="card mt3">
+  <div class="card-head"><h2>SQL Techniques on This Page</h2></div>
+  <div class="card-body">
+    <div class="grid grid-4">
+      {{ stat("Aggregates", "COUNT AVG MIN MAX SUM", "With GROUP BY & HAVING") }}
+      {{ stat("Analytic", "ROW_NUMBER() OVER", "Top-N per partition", "accent") }}
+      {{ stat("Crosstab", "SUM(CASE ...)", "Conditional aggregation", "warn") }}
+      {{ stat("Outer Join", "LEFT JOIN", "Keeps empty cities visible", "good") }}
+    </div>
+  </div>
+  <div class="card-foot">
+    {% if user %}
+      View live query code and outputs on the <a href="/database">SQL Showcase</a> page.
+    {% else %}
+      <a href="/login">Sign In</a> to inspect live execution for every query.
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

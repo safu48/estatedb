@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+{% from "_macros.html" import prop_card, empty %}
+{% block title %}{{ p.title }}{% endblock %}
+
+{% block content %}
+
+<div class="page-head">
+  <div>
+    <div class="row-tight mb1">
+      <span class="badge {{ p.listing_type|status_class }}">
+        {{ 'For Sale' if p.listing_type == 'SALE' else 'For Rent' }}
+      </span>
+      <span class="badge {{ p.status|status_class }}">{{ p.status|status_label }}</span>
+      {% if p.featured == 'Y' %}<span class="badge badge-featured">Featured</span>{% endif %}
+      <span class="badge">{{ p.type_name }}</span>
+    </div>
+    <h1>{{ p.title }}</h1>
+    <p class="sub">{{ p.address }}, {{ p.city_name }} {{ p.state }}</p>
+  </div>
+  <div class="right">
+    <div class="price-tag">
+      {{ p.price|money }}<span class="per">{{ ' / mo' if p.listing_type == 'RENT' }}</span>
+    </div>
+    <div class="small muted">
+      Listing #{{ p.property_id }} &middot;
+      {{ p.months_listed if p.months_listed is not none else '?' }} months on market
+    </div>
+  </div>
+</div>
+
+<div class="grid grid-detail">
+
+  <!-- ============================================================ left -->
+  <div class="stack">
+
+    <!-- gallery -->
+    <div class="gallery">
+      <div class="main">
+        <img src="{{ images[0].image_url if images else '/static/img/prop-01.jpg' }}"
+             alt="{{ p.title }}" data-gallery-main>
+      </div>
+      {% if images|length > 1 %}
+        <div class="thumbs">
+          {% for img in images %}
+            <a href="{{ img.image_url }}" data-gallery-thumb="{{ img.image_url }}">
+              <img src="{{ img.image_url }}" alt="Photo {{ loop.index }}" loading="lazy">
+            </a>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+
+    <!-- specs -->
+    <section class="card">
+      <div class="card-head"><h2>Property Specifications</h2>
+        <span class="hint">properties table</span></div>
+      <div class="card-body">
+        <div class="spec-grid">
+          <div><div class="k">Bedrooms</div><div class="v">{{ p.bedrooms }}</div></div>
+          <div><div class="k">Bathrooms</div><div class="v">{{ p.bathrooms }}</div></div>
+          <div><div class="k">Area</div>
+               <div class="v">{{ (p.area_sqft|num ~ ' sqft') if p.area_sqft else '--' }}</div></div>
+          <div><div class="k">Year Built</div><div class="v">{{ p.year_built or '--' }}</div></div>
+          <div><div class="k">Property Type</div><div class="v">{{ p.type_name }}</div></div>
+          <div><div class="k">City</div><div class="v">{{ p.city_name }}</div></div>
+          <div><div class="k">Date Listed</div><div class="v">{{ p.created_at|datefmt }}</div></div>
+          <div><div class="k">Saved By</div><div class="v">{{ p.favorite_count }} users</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- description -->
+    {% if p.description %}
+      <section class="card">
+        <div class="card-head"><h2>Property Description</h2>
+          <span class="hint">TEXT column</span></div>
+        <div class="card-body">
+          <p style="white-space:pre-line;margin:0">{{ p.description }}</p>
+        </div>
+      </section>
+    {% endif %}
+
+    <!-- amenities -->
+    <section class="card">
+      <div class="card-head"><h2>Amenities & Features</h2>
+        <span class="hint">{{ amenities|length }} amenities linked via property_amenities</span></div>
+      <div class="card-body">
+        {% if amenities %}
+          <div class="row-tight">
+            {% for a in amenities %}
+              <a class="chip" href="/listings?amenity_id={{ a.amenity_id }}">
+                &#10003; {{ a.amenity_name }}
+              </a>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="muted mb0">No amenities recorded for this property.</p>
+        {% endif %}
+      </div>
+      <div class="card-foot">
+        Many-to-many relationship implemented via the <code>property_amenities</code> bridge table with composite primary key.
+      </div>
+    </section>
+
+    <!-- similar -->
+    <section>
+      <h2 class="mb2">Similar Properties in {{ p.city_name }}</h2>
+      {% if similar %}
+        <div class="grid grid-cards">
+          {% for s in similar %}{{ prop_card(s, None, user, "/property/" ~ p.property_id) }}{% endfor %}
+        </div>
+        <p class="small muted mt2">
+          Properties in the same city within &plusmn;25% price range, ranked by price proximity via correlated subqueries.
+        </p>
+      {% else %}
+        <div class="card">{{ empty("No comparable properties found in this city.") }}</div>
+      {% endif %}
+    </section>
+  </div>
+
+  <!-- =========================================================== right -->
+  <div class="stack">
+
+    <!-- agent card -->
+    <section class="card">
+      <div class="card-head"><h2>Listing Agent</h2></div>
+      <div class="card-body">
+        <div class="agent-box mb2">
+          <span class="avatar">{{ p.agent_name[:1]|upper }}</span>
+          <div style="min-width:0">
+            <div><a href="/agents/{{ p.agent_id }}"><b>{{ p.agent_name }}</b></a></div>
+            <div class="small muted">Licensed Real Estate Agent</div>
+          </div>
+        </div>
+        <div class="small stack" style="gap:6px">
+          <div><span class="faint">Phone:</span> {{ p.agent_phone or '--' }}</div>
+          <div><span class="faint">Email:</span> {{ p.agent_email }}</div>
+        </div>
+      </div>
+      <div class="card-foot">
+        <a href="/agents/{{ p.agent_id }}">View Agent Listings &rarr;</a>
+      </div>
+    </section>
+
+    <!-- save -->
+    {% if user %}
+      <form method="post" action="/property/{{ p.property_id }}/favorite">
+        <input type="hidden" name="redirect_to" value="/property/{{ p.property_id }}">
+        <button class="btn btn-block {{ 'btn-danger-ghost' if is_favorite else 'btn-ghost' }}">
+          {{ '&#10084; Remove from Favorites'|safe if is_favorite else '&#10084; Save to Favorites'|safe }}
+        </button>
+      </form>
+    {% endif %}
+
+    <!-- inquiry -->
+    <section class="card">
+      <div class="card-head"><h2>Schedule a Tour / Inquiry</h2></div>
+
+      {% if not user %}
+        <div class="card-body">
+          <p class="muted">Sign in as a customer to send inquiries or tour requests.</p>
+          <a href="/login?next=/property/{{ p.property_id }}" class="btn btn-block">Sign In</a>
+        </div>
+      {% elif user.role != 'Customer' %}
+        <div class="card-body">
+          <p class="muted mb0">
+            You are signed in as {{ user.role }}. Inquiries can only be submitted by customer accounts.
+          </p>
+        </div>
+      {% elif p.status in ('SOLD', 'RENTED') %}
+        <div class="card-body">
+          <p class="muted mb0">This property is no longer available on the market.</p>
+        </div>
+      {% else %}
+        <form method="post" action="/property/{{ p.property_id }}/inquire">
+          <div class="card-body">
+            <div class="field">
+              <label for="message">Message</label>
+              <textarea id="message" name="message" required
+                        placeholder="I am interested in this property and would like to schedule a tour..."></textarea>
+            </div>
+            <div class="field">
+              <label for="preferred_date">Preferred Tour Date</label>
+              <input id="preferred_date" type="date" name="preferred_date">
+              <div class="help">Stored as standard DATE in PostgreSQL.</div>
+            </div>
+            <button class="btn btn-accent btn-block">Send Inquiry</button>
+          </div>
+        </form>
+      {% endif %}
+    </section>
+
+    <!-- teaching note -->
+    <section class="card">
+      <div class="card-head"><h3>Under the Hood (SQL Highlights)</h3></div>
+      <div class="card-body small stack" style="gap:8px">
+        <div>&bull; Sourced from the <code>v_property_listings</code> view (JOIN of 4 tables).</div>
+        <div>&bull; Full description stored in a <code>TEXT</code> column.</div>
+        <div>&bull; Months on market calculated via PostgreSQL stored function <code>fn_months_listed()</code>.</div>
+        <div>&bull; Gallery primary image determined by <code>is_primary = 'Y'</code>.</div>
+        <div>&bull; Similar properties filtered with correlated subqueries and <code>LIMIT</code>.</div>
+        <div>&bull; Favorites use composite PK table with <code>ON CONFLICT DO NOTHING</code>.</div>
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

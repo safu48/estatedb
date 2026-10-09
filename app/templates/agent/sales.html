@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+{% from "_macros.html" import empty, stat %}
+{% block title %}Transactions &amp; Deals &middot; Agent Desk{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Transactions &amp; Deals</h1>
+    <p class="sub">
+      Closing a deal executes one of the most comprehensive database transactions in EstateDB: atomically updating 3 tables and calculating commissions directly inside stored procedures and triggers.
+    </p>
+  </div>
+  <nav class="tabs">
+    <a href="/agent">Overview</a>
+    <a href="/agent/properties">Properties</a>
+    <a href="/agent/inquiries">Inquiries</a>
+    <a class="on" href="/agent/sales">Sales</a>
+    <a href="/agent/profile">Profile</a>
+  </nav>
+</div>
+
+{% set volume = rows|map(attribute='sale_price')|map('float')|sum if rows else 0 %}
+{% set earned = rows|map(attribute='commission_amount')|map('float')|sum if rows else 0 %}
+
+<div class="grid grid-4 mb3">
+  {{ stat("Closed Deals", rows|length, "Transactions recorded") }}
+  {{ stat("Total Volume", volume|money_short, "Cumulative deal volume", "accent") }}
+  {{ stat("Commission Earned", earned|money_short, "Earned agent commission", "good") }}
+  {{ stat("Average Deal",
+          (volume / rows|length)|money_short if rows else '--',
+          "Average deal value", "warn") }}
+</div>
+
+<div class="grid grid-detail">
+
+  <!-- ============================================================== left -->
+  <div class="stack">
+    <section class="card">
+      <div class="card-head">
+        <h2>Transaction History</h2>
+        <span class="hint">JOIN transactions with properties and users</span>
+      </div>
+
+      {% if rows %}
+        <div class="table-wrap">
+          <table class="data">
+            <thead>
+              <tr>
+                <th>#</th><th>Property</th><th>Buyer</th><th>Date</th>
+                <th>Type</th><th class="num">Deal Price</th>
+                <th class="num">Commission</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for t in rows %}
+              <tr>
+                <td class="faint">{{ t.transaction_id }}</td>
+                <td>{{ t.property_title }}</td>
+                <td>{{ t.buyer_name }}</td>
+                <td class="nowrap">{{ t.txn_date|datefmt }}</td>
+                <td><span class="badge {{ t.txn_type|status_class }}">
+                    {{ 'For Sale' if t.txn_type == 'SALE' else 'For Rent' }}</span></td>
+                <td class="num">{{ t.sale_price|money }}</td>
+                <td class="num">{{ t.commission_amount|money }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+            <tfoot>
+              <tr class="total-row">
+                <td colspan="5">Total: {{ rows|length }} deals</td>
+                <td class="num">{{ volume|money }}</td>
+                <td class="num">{{ earned|money }}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      {% else %}
+        <div class="card-body">{{ empty("No closed transactions recorded yet.") }}</div>
+      {% endif %}
+
+      <div class="card-foot">
+        Commission amounts are computed via <code>trg_txn_commission</code> trigger based on your active rate (<b>{{ me.commission_rate }}%</b>), safeguarding historical records even if rates change in the future.
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------- what happens ---- -->
+    <section class="card">
+      <div class="card-head">
+        <h2>Database Execution Flow</h2>
+        <span class="hint">sp_record_sale</span>
+      </div>
+      <div class="card-body">
+        <ol class="steps">
+          <li><b>Validation:</b> Checks property existence, ensures current status is not already closed, verifies positive price, and validates transaction type.</li>
+          <li><b>Insert:</b> Inserts a new record into <code>transactions</code>. <code>AUTO_INCREMENT</code> assigns the primary key and the <code>BEFORE INSERT</code> trigger (<code>trg_txn_commission</code>) calculates commission.</li>
+          <li><b>Update:</b> Changes property status to SOLD or RENTED based on transaction type.</li>
+          <li><b>Auto-Close:</b> Closes open inquiries for this listing automatically since the deal is finalized.</li>
+          <li><b>Commit:</b> Transaction commits atomically. Any unexpected error triggers a complete rollback.</li>
+        </ol>
+      </div>
+      <div class="card-foot">
+        Stored procedures enforce core business logic at the database layer with clean error handling.
+      </div>
+    </section>
+  </div>
+
+  <!-- ============================================================= right -->
+  <div class="stack">
+    <section class="card">
+      <div class="card-head"><h2>Record New Transaction</h2></div>
+
+      {% if open_listings %}
+        <form method="post" action="/agent/sales">
+          <div class="card-body">
+            <div class="field">
+              <label for="property_id">Property</label>
+              <select id="property_id" name="property_id" required>
+                <option value="">Select a listing</option>
+                {% for p in open_listings %}
+                  <option value="{{ p.property_id }}">
+                    #{{ p.property_id }} &mdash; {{ p.title|truncate_words(5) }}
+                    ({{ p.price|money_short }}, {{ p.status|status_label }})
+                  </option>
+                {% endfor %}
+              </select>
+              <div class="help">
+                Only AVAILABLE and PENDING listings can be closed.
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="buyer_id">Buyer</label>
+              <select id="buyer_id" name="buyer_id" required>
+                <option value="">Select Customer</option>
+                {% for b in buyers %}
+                  <option value="{{ b.user_id }}">
+                    {{ b.full_name }} &mdash; {{ b.email }}
+                  </option>
+                {% endfor %}
+              </select>
+              <div class="help">
+                Customer account foreign key to <code>users</code> table.
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="sale_price">Agreed Price (৳)</label>
+              <input id="sale_price" name="sale_price" type="number" required
+                     min="1" step="500" placeholder="e.g. 5000000">
+              <div class="help">
+                Final agreed price, which may differ from asking price.
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="txn_type">Transaction Type</label>
+              <select id="txn_type" name="txn_type" required>
+                <option value="SALE">Sale &mdash; Property status will update to SOLD</option>
+                <option value="RENT">Rent &mdash; Property status will update to RENTED</option>
+              </select>
+            </div>
+
+            <button class="btn btn-accent btn-block btn-lg">Record Transaction</button>
+          </div>
+        </form>
+        <div class="card-foot">
+          Commission and transaction date are generated automatically by database triggers and CURRENT_TIMESTAMP.
+        </div>
+      {% else %}
+        <div class="card-body">
+          {{ empty("No available listings eligible for closing.") }}
+          <p class="center mb0">
+            <a href="/agent/properties/new" class="btn btn-sm btn-accent">
+              Add New Listing
+            </a>
+          </p>
+        </div>
+      {% endif %}
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h3>Your Commission Rate</h3></div>
+      <div class="card-body">
+        <div class="center">
+          <div class="price-tag">{{ me.commission_rate }}%</div>
+          <p class="small muted mb0">
+            A ৳5,000,000 transaction earns:
+            <b>{{ (5000000 * me.commission_rate|float / 100)|money }}</b>.
+          </p>
+        </div>
+      </div>
+      <div class="card-foot">
+        Update rate in <a href="/agent/profile">Profile &rarr;</a> (CHECK constraint limits rate between 0% and 20%).
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

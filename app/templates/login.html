@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Sign In{% endblock %}
+{% block main_class %}wrap page narrow{% endblock %}
+
+{% block content %}
+<div class="auth-card">
+  <div class="card">
+    <div class="card-head">
+      <h1 class="mb0">Sign In</h1>
+    </div>
+    <form method="post" action="/login">
+      <div class="card-body">
+        <input type="hidden" name="next_url" value="{{ next_url or '' }}">
+
+        <div class="field">
+          <label for="username">Username</label>
+          <input id="username" name="username" required autofocus
+                 autocomplete="username" placeholder="e.g. admin, sarah, john">
+        </div>
+
+        <div class="field">
+          <label for="password">Password</label>
+          <input id="password" name="password" type="password" required
+                 autocomplete="current-password">
+          <div class="help">
+            Verified against PBKDF2-HMAC-SHA256 (100,000 iterations) salt & hash in <code>users</code> table.
+          </div>
+        </div>
+
+        <button class="btn btn-accent btn-block btn-lg">Sign In</button>
+      </div>
+    </form>
+    <div class="card-foot center">
+      Don't have an account yet? <a href="/register">Register as Customer</a>.
+    </div>
+  </div>
+
+  <!-- demo credentials -->
+  <section class="card mt2">
+    <div class="card-head">
+      <h2>Demo Accounts</h2>
+      <span class="hint">From 06_seed.sql</span>
+    </div>
+    <div class="table-wrap">
+      <table class="data">
+        <thead>
+          <tr><th>Role</th><th>Username</th><th>Password</th><th>Dashboard</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="badge badge-admin">Admin</span></td>
+            <td><code>admin</code></td><td><code>Admin@123</code></td>
+            <td class="muted">Admin Console</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-agent">Agent</span></td>
+            <td><code>sarah</code></td><td><code>Agent@123</code></td>
+            <td class="muted">Agent Desk (Sarah)</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-customer">Customer</span></td>
+            <td><code>john</code></td><td><code>User@123</code></td>
+            <td class="muted">Customer Portal (John)</td>
+          </tr>
+        </tbody>
+        <caption>
+          All agent passwords are <code>Agent@123</code>; all customer passwords are <code>User@123</code>.
+        </caption>
+      </table>
+    </div>
+    <div class="card-foot">
+      Protected with role-based access control via <code>require_role()</code>.
+    </div>
+  </section>
+</div>
+{% endblock %}

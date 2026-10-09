@@ -1,0 +1,293 @@
+{% extends "base.html" %}
+{% from "_macros.html" import empty %}
+{% block title %}{{ 'Edit Listing' if p else 'New Listing' }} &middot; Agent Desk{% endblock %}
+
+{% set f = form|default({}, true) %}
+{% macro val(key) %}{% if f.get(key) %}{{ f.get(key) }}{% elif p and p[key] is not none %}{{ p[key] }}{% endif %}{% endmacro %}
+{% macro chosen(key, option) %}{% if f.get(key) %}{{ 'selected' if f.get(key)|string == option|string }}{% elif p %}{{ 'selected' if p[key]|string == option|string }}{% endif %}{% endmacro %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>{{ 'Edit Listing #' ~ p.property_id if p else 'Create New Listing' }}</h1>
+    <p class="sub">
+      {% if p %}
+        Saving executes an <code>UPDATE</code> on <code>properties</code> and synchronizes amenity links within a single transaction.
+      {% else %}
+        Saving executes <code>INSERT</code> operations across properties, photos, and amenity links inside a database transaction. Any failure triggers a clean rollback.
+      {% endif %}
+    </p>
+  </div>
+  <nav class="tabs">
+    <a href="/agent">Overview</a>
+    <a class="on" href="/agent/properties">Properties</a>
+    <a href="/agent/inquiries">Inquiries</a>
+    <a href="/agent/sales">Sales</a>
+    <a href="/agent/profile">Profile</a>
+  </nav>
+</div>
+
+<form method="post"
+      action="{{ '/agent/properties/' ~ p.property_id ~ '/edit' if p
+                 else '/agent/properties/new' }}">
+  <div class="grid grid-detail">
+
+    <!-- ============================================================ left -->
+    <div class="stack">
+
+      <section class="card">
+        <div class="card-head"><h2>Basic Information</h2>
+          <span class="hint">NOT NULL columns</span></div>
+        <div class="card-body">
+          <div class="field">
+            <label for="title">Title *</label>
+            <input id="title" name="title" required maxlength="150"
+                   value="{{ val('title') }}"
+                   placeholder="e.g. Modern Luxury Apartment in Gulshan">
+          </div>
+
+          <div class="field">
+            <label for="address">Address *</label>
+            <input id="address" name="address" required maxlength="200"
+                   value="{{ val('address') }}">
+          </div>
+
+          <div class="field-row">
+            <div class="field">
+              <label for="city_id">City *</label>
+              <select id="city_id" name="city_id" required>
+                <option value="">Select City</option>
+                {% for c in cities %}
+                  <option value="{{ c.city_id }}" {{ chosen('city_id', c.city_id) }}>
+                    {{ c.city_name }}, {{ c.state }}
+                  </option>
+                {% endfor %}
+              </select>
+              <div class="help">Foreign key to <code>cities</code> table.</div>
+            </div>
+            <div class="field">
+              <label for="type_id">Property Type *</label>
+              <select id="type_id" name="type_id" required>
+                <option value="">Select Type</option>
+                {% for t in types %}
+                  <option value="{{ t.type_id }}" {{ chosen('type_id', t.type_id) }}>
+                    {{ t.type_name }}
+                  </option>
+                {% endfor %}
+              </select>
+              <div class="help">Foreign key to <code>property_types</code> table.</div>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="description">Description</label>
+            <textarea id="description" name="description" rows="6"
+                      placeholder="Highlight key features, floor plan details, view, and neighborhood benefits...">{{ val('description') }}</textarea>
+            <div class="help">
+              Stored as a <code>TEXT</code> column in the database.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2>Pricing & Specifications</h2>
+          <span class="hint">CHECK constraints</span></div>
+        <div class="card-body">
+          <div class="field-row">
+            <div class="field">
+              <label for="price">Price (৳) *</label>
+              <input id="price" name="price" type="number" required
+                     min="1" step="1000" value="{{ val('price') }}">
+              <div class="help"><code>CHECK (price &gt; 0)</code></div>
+            </div>
+            <div class="field">
+              <label for="listing_type">Offer Type *</label>
+              <select id="listing_type" name="listing_type" required>
+                <option value="SALE" {{ chosen('listing_type', 'SALE') }}>For Sale</option>
+                <option value="RENT" {{ chosen('listing_type', 'RENT') }}>For Rent</option>
+              </select>
+              <div class="help">
+                <code>CHECK (listing_type IN ('SALE','RENT'))</code>
+              </div>
+            </div>
+          </div>
+
+          <div class="field-row-3">
+            <div class="field">
+              <label for="bedrooms">Bedrooms</label>
+              <input id="bedrooms" name="bedrooms" type="number" min="0" max="20"
+                     value="{{ val('bedrooms') or 0 }}">
+            </div>
+            <div class="field">
+              <label for="bathrooms">Bathrooms</label>
+              <input id="bathrooms" name="bathrooms" type="number" min="0" max="20"
+                     value="{{ val('bathrooms') or 0 }}">
+            </div>
+            <div class="field">
+              <label for="area_sqft">Area (sqft)</label>
+              <input id="area_sqft" name="area_sqft" type="number" min="0" step="10"
+                     value="{{ val('area_sqft') }}">
+            </div>
+          </div>
+
+          <div class="field-row">
+            <div class="field">
+              <label for="year_built">Year Built</label>
+              <input id="year_built" name="year_built" type="number"
+                     min="1800" max="2100" value="{{ val('year_built') }}">
+              <div class="help">
+                <code>CHECK (year_built BETWEEN 1800 AND 2100)</code>
+              </div>
+            </div>
+            <div class="field">
+              <label for="status">Status</label>
+              <select id="status" name="status">
+                {% for s in ['AVAILABLE', 'PENDING', 'SOLD', 'RENTED'] %}
+                  <option value="{{ s }}" {{ chosen('status', s) }}>{{ s|status_label }}</option>
+                {% endfor %}
+              </select>
+              <div class="help">Updates are logged in audit_log.</div>
+            </div>
+          </div>
+
+          <label class="check">
+            <input type="checkbox" name="featured" value="1"
+                   {% if f.get('featured') or (p and p.featured == 'Y') %}checked{% endif %}>
+            Feature this listing on the homepage
+          </label>
+        </div>
+      </section>
+
+      <!-- ------------------------------------------------------ amenities -->
+      <section class="card">
+        <div class="card-head">
+          <h2>Amenities</h2>
+          <span class="hint">{{ all_amenities|length }} options available</span>
+        </div>
+        <div class="card-body">
+          <div class="check-grid">
+            {% for a in all_amenities %}
+              <label class="check">
+                <input type="checkbox" name="amenity_id" value="{{ a.amenity_id }}"
+                       {{ 'checked' if a.amenity_id|int in selected_amenities }}>
+                {{ a.amenity_name }}
+              </label>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="card-foot">
+          {% if p %}
+            Saving replaces existing amenity associations. Composite primary key <code>(property_id, amenity_id)</code> prevents duplicates.
+          {% else %}
+            Each selected amenity is inserted as a junction record in <code>property_amenities</code>.
+          {% endif %}
+        </div>
+      </section>
+    </div>
+
+    <!-- =========================================================== right -->
+    <div class="stack">
+
+      <section class="card">
+        <div class="card-head"><h3>{{ 'Save Changes' if p else 'Create Listing' }}</h3></div>
+        <div class="card-body">
+          <button class="btn btn-accent btn-block btn-lg">
+            {{ 'Save Changes' if p else 'Create Listing' }}
+          </button>
+          <a href="/agent/properties" class="btn btn-ghost btn-block mt2">Cancel</a>
+          {% if p %}
+            <a href="/property/{{ p.property_id }}" class="btn btn-link btn-block mt1">
+              View Public Page
+            </a>
+          {% endif %}
+        </div>
+        <div class="card-foot">
+          {% if p %}
+            You are editing listing #{{ p.property_id }}. Application verifies agent ownership prior to database update.
+          {% else %}
+            <code>agent_id</code> is derived from your active session to preserve relational integrity.
+          {% endif %}
+        </div>
+      </section>
+
+      <!-- images -->
+      <section class="card">
+        <div class="card-head"><h3>Photos</h3></div>
+        <div class="card-body">
+          {% if p %}
+            {% if images %}
+              <div class="stack">
+                {% for img in images %}
+                  <div class="between">
+                    <img src="{{ img.image_url }}" alt=""
+                         style="width:70px;height:52px;object-fit:cover;border-radius:6px">
+                    <div class="small" style="min-width:0;flex:1;padding:0 8px">
+                      <div class="mono tiny">{{ img.image_url }}</div>
+                      {% if img.is_primary == 'Y' %}
+                        <span class="badge badge-featured">Cover</span>
+                      {% endif %}
+                    </div>
+                  </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              {{ empty("No photos uploaded yet.") }}
+            {% endif %}
+            <p class="small muted mt2 mb0">
+              Photos can be managed from the listing details.
+            </p>
+          {% else %}
+            <div data-image-list class="stack">
+              <div class="field">
+                <label>Photo URL</label>
+                <input name="image_url" value="/static/img/prop-01.jpg">
+              </div>
+            </div>
+            <button type="button" class="btn btn-ghost btn-sm btn-block mt2"
+                    data-add-image>+ Add Another Photo</button>
+            <p class="small muted mt2 mb0">
+              Project includes real images generated with Gemini
+              (<code>/static/img/prop-01.jpg</code> to <code>prop-08.jpg</code>).
+              First photo serves as the primary cover.
+            </p>
+          {% endif %}
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h3>Database Managed Fields</h3></div>
+        <div class="table-wrap">
+          <table class="data">
+            <tbody>
+              <tr>
+                <td><code>property_id</code></td>
+                <td class="muted">AUTO_INCREMENT primary key</td>
+              </tr>
+              <tr>
+                <td><code>created_at</code></td>
+                <td class="muted">DEFAULT CURRENT_TIMESTAMP</td>
+              </tr>
+              <tr>
+                <td><code>updated_at</code></td>
+                <td class="muted">Updated via BEFORE UPDATE trigger</td>
+              </tr>
+              <tr>
+                <td><code>agent_id</code></td>
+                <td class="muted">From logged-in session</td>
+              </tr>
+              <tr>
+                <td><code>audit_log</code></td>
+                <td class="muted">Automatic insert/update trigger log</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card-foot">
+          MySQL automatically manages <code>AUTO_INCREMENT</code> and returns the new ID via <code>LAST_INSERT_ID()</code>.
+        </div>
+      </section>
+    </div>
+  </div>
+</form>
+{% endblock %}

@@ -1,0 +1,166 @@
+{# ==========================================================================
+   Reusable fragments. Imported as:  {% from "_macros.html" import ... %}
+   ========================================================================== #}
+
+{# ---------------------------------------------------------- property card #}
+{% macro prop_card(p, favorite_ids=None, user=None, redirect_to="") %}
+<article class="prop">
+  <div class="prop-media">
+    <a href="/property/{{ p.property_id }}">
+      <img src="{{ p.primary_image or '/static/img/prop-01.jpg' }}"
+           alt="{{ p.title }}" loading="lazy">
+    </a>
+    <div class="tags">
+      <span class="badge {{ p.listing_type|status_class }}">
+        {{ 'For Sale' if p.listing_type == 'SALE' else 'For Rent' }}
+      </span>
+      {% if p.status != 'AVAILABLE' %}
+        <span class="badge {{ p.status|status_class }}">{{ p.status|status_label }}</span>
+      {% endif %}
+      {% if p.featured == 'Y' %}<span class="badge badge-featured">Featured</span>{% endif %}
+    </div>
+
+    {% if user %}
+      <form method="post" action="/property/{{ p.property_id }}/favorite" class="inline-form">
+        <input type="hidden" name="redirect_to" value="{{ redirect_to }}">
+        <button class="fav {{ 'on' if favorite_ids and p.property_id in favorite_ids }}"
+                title="Save to Favorites">&#10084;</button>
+      </form>
+    {% endif %}
+  </div>
+
+  <div class="prop-body">
+    <div class="prop-price">
+      {{ p.price|money }}<span class="per">{{ ' / mo' if p.listing_type == 'RENT' }}</span>
+    </div>
+    <h3 class="prop-title"><a href="/property/{{ p.property_id }}">{{ p.title }}</a></h3>
+    <div class="prop-addr">{{ p.address }}, {{ p.city_name }} {{ p.state }}</div>
+    <div class="prop-facts">
+      <span><b>{{ p.bedrooms }}</b> Beds</span>
+      <span><b>{{ p.bathrooms }}</b> Baths</span>
+      {% if p.area_sqft %}<span><b>{{ p.area_sqft|num }}</b> sqft</span>{% endif %}
+      <span class="faint">{{ p.type_name }}</span>
+    </div>
+  </div>
+
+  <div class="prop-agent">
+    <span class="avatar">{{ p.agent_name[:1]|upper }}</span>
+    <a href="/agents/{{ p.agent_id }}">{{ p.agent_name }}</a>
+    <span class="spacer"></span>
+    <span class="faint" title="Saved in Favorites">&#10084; {{ p.favorite_count }}</span>
+  </div>
+</article>
+{% endmacro %}
+
+
+{# --------------------------------------------------------- listings table #}
+{% macro prop_rows(rows, show_agent=True) %}
+<div class="table-wrap">
+  <table class="data">
+    <thead>
+      <tr>
+        <th>#</th><th>Title</th><th>City</th><th>Type</th>
+        <th class="num">Price</th><th class="num">Beds</th>
+        <th>Offer</th><th>Status</th>{% if show_agent %}<th>Agent</th>{% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in rows %}
+      <tr>
+        <td class="faint">{{ p.property_id }}</td>
+        <td><a href="/property/{{ p.property_id }}">{{ p.title }}</a></td>
+        <td>{{ p.city_name }}</td>
+        <td>{{ p.type_name }}</td>
+        <td class="num">{{ p.price|money }}</td>
+        <td class="num">{{ p.bedrooms }}</td>
+        <td><span class="badge {{ p.listing_type|status_class }}">{{ p.listing_type|status_label }}</span></td>
+        <td><span class="badge {{ p.status|status_class }}">{{ p.status|status_label }}</span></td>
+        {% if show_agent %}
+          <td><a href="/agents/{{ p.agent_id }}">{{ p.agent_name }}</a></td>
+        {% endif %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endmacro %}
+
+
+{# ------------------------------------------------------------ empty state #}
+{% macro empty(text, glyph="&#9633;") %}
+<div class="empty">
+  <span class="big">{{ glyph|safe }}</span>
+  {{ text }}
+</div>
+{% endmacro %}
+
+
+{# ------------------------------------------------------------- stat tile #}
+{% macro stat(label, value, note="", tone="") %}
+<div class="stat {{ tone }}">
+  <div class="k">{{ label }}</div>
+  <div class="v">{{ value }}</div>
+  {% if note %}<div class="n">{{ note }}</div>{% endif %}
+</div>
+{% endmacro %}
+
+
+{# ------------------------------------------------ horizontal bar chart row
+   `value` drives the width, `peak` is the largest value in the set.        #}
+{% macro bar(label, value, peak, display=None, tone="") %}
+<div class="bar-row">
+  <span class="lbl" title="{{ label }}">{{ label }}</span>
+  <span class="bar-track">
+    <span class="bar-fill {{ tone }}"
+          style="width: {{ ((value or 0) / peak * 100) if peak else 0 }}%"></span>
+  </span>
+  <span class="val">{{ display if display is not none else value }}</span>
+</div>
+{% endmacro %}
+
+
+{# ---------------------------------------------------------- pager control #}
+{% macro pager(page, total_pages, base_query, path="/listings") %}
+{% if total_pages > 1 %}
+<nav class="pager">
+  {% if page > 1 %}
+    <a href="{{ path }}?{{ base_query }}&page={{ page - 1 }}">&larr; Previous</a>
+  {% else %}
+    <span class="disabled">&larr; Previous</span>
+  {% endif %}
+
+  {% for n in range(1, total_pages + 1) %}
+    {% if n == 1 or n == total_pages or (n >= page - 1 and n <= page + 1) %}
+      {% if n == page %}
+        <span class="current">{{ n }}</span>
+      {% else %}
+        <a href="{{ path }}?{{ base_query }}&page={{ n }}">{{ n }}</a>
+      {% endif %}
+    {% elif n == page - 2 or n == page + 2 %}
+      <span class="gap">&hellip;</span>
+    {% endif %}
+  {% endfor %}
+
+  {% if page < total_pages %}
+    <a href="{{ path }}?{{ base_query }}&page={{ page + 1 }}">Next &rarr;</a>
+  {% else %}
+    <span class="disabled">Next &rarr;</span>
+  {% endif %}
+</nav>
+{% endif %}
+{% endmacro %}
+
+
+{# ------------------------------------------------------- star rating input #}
+{% macro rating_input(name="rating", current=None) %}
+<div data-rating class="row-tight" style="align-items:center">
+  {% for n in [1, 2, 3, 4, 5] %}
+    <label class="check" style="gap:3px">
+      <input type="radio" name="{{ name }}" value="{{ n }}"
+             {{ 'checked' if current and current|int == n }} required
+             style="position:absolute;opacity:0;width:1px;height:1px">
+      <span data-star="{{ n }}" class="stars" style="font-size:1.5rem;cursor:pointer">&#9734;</span>
+    </label>
+  {% endfor %}
+</div>
+{% endmacro %}

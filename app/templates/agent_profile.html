@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+{% from "_macros.html" import prop_card, empty, stat, bar, rating_input %}
+{% block title %}{{ a.agent_name }}{% endblock %}
+
+{% block content %}
+
+<div class="page-head">
+  <div class="agent-box">
+    <span class="avatar lg">{{ a.agent_name[:1]|upper }}</span>
+    <div>
+      <h1 class="mb0">{{ a.agent_name }}</h1>
+      <p class="sub mb0">
+        {{ a.agency_name or 'Independent Agent' }} &middot;
+        Joined: {{ a.hire_date|datefmt('%B %Y') }}
+      </p>
+      <div class="mt1">
+        <span class="stars">{{ a.avg_rating|stars }}</span>
+        <span class="small muted">
+          {% if a.review_count %}
+            {{ a.avg_rating }} out of 5 ({{ a.review_count }} reviews)
+          {% else %}
+            No reviews yet
+          {% endif %}
+        </span>
+      </div>
+    </div>
+  </div>
+  <div class="right small stack" style="gap:4px">
+    <div><span class="faint">Phone:</span> {{ a.phone or '--' }}</div>
+    <div><span class="faint">Email:</span> {{ a.email }}</div>
+    <div><span class="faint">Commission:</span> {{ a.commission_rate }}%</div>
+  </div>
+</div>
+
+<!-- ------------------------------------------------------------------ KPIs -->
+<div class="grid grid-4 mb3">
+  {{ stat("Active Listings", a.total_listings|num, "Properties assigned") }}
+  {{ stat("Closed Deals", a.closed_listings|num, "SOLD or RENTED status", "good") }}
+  {{ stat("Total Sales Volume", a.total_sales_value|money_short, "Total transacted value", "accent") }}
+  {{ stat("Commission Earned", a.total_commission|money_short, "Calculated via triggers", "warn") }}
+</div>
+
+<div class="grid grid-detail">
+
+  <!-- =========================================================== left col -->
+  <div class="stack">
+
+    {% if a.bio %}
+      <section class="card">
+        <div class="card-head"><h2>About {{ a.agent_name.split()[0] }}</h2>
+          <span class="hint">agents.bio, TEXT column</span></div>
+        <div class="card-body">
+          <p style="white-space:pre-line;margin:0">{{ a.bio }}</p>
+        </div>
+      </section>
+    {% endif %}
+
+    <section>
+      <div class="between mb2">
+        <h2 class="mb0">Listings by This Agent</h2>
+        <a href="/listings?agent_id={{ a.agent_id }}" class="btn btn-sm btn-ghost">
+          View on Search Page
+        </a>
+      </div>
+      {% if listings %}
+        <div class="grid grid-cards">
+          {% for p in listings %}
+            {{ prop_card(p, None, user, "/agents/" ~ a.agent_id) }}
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="card">{{ empty("No active listings found for this agent.") }}</div>
+      {% endif %}
+    </section>
+
+    <!-- ------------------------------------------------------------ reviews -->
+    <section class="card">
+      <div class="card-head">
+        <h2>Customer Reviews & Feedback</h2>
+        <span class="hint">{{ a.review_count }} total</span>
+      </div>
+
+      <div class="card-body">
+        {% if reviews %}
+          <div class="stack">
+            {% for r in reviews %}
+              <div class="review">
+                <div class="between">
+                  <div>
+                    <span class="avatar sm">{{ r.customer_name[:1]|upper }}</span>
+                    <b>{{ r.customer_name }}</b>
+                  </div>
+                  <div class="right">
+                    <span class="stars">{{ r.rating|stars }}</span>
+                    <div class="tiny faint">{{ r.review_date|datefmt }}</div>
+                  </div>
+                </div>
+                {% if r.comments %}
+                  <p class="mb0 mt1">{{ r.comments }}</p>
+                {% else %}
+                  <p class="mb0 mt1 faint"><i>Rating provided without comments.</i></p>
+                {% endif %}
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          {{ empty("No customer reviews for this agent yet.", "&#9734;") }}
+        {% endif %}
+      </div>
+
+      <div class="card-foot">
+        Enforced by a <code>UNIQUE (agent_id, customer_id)</code> constraint so each customer has at most one review per agent (UPSERT on re-submission).
+      </div>
+    </section>
+  </div>
+
+  <!-- ========================================================== right col -->
+  <div class="stack">
+
+    <!-- write a review -->
+    <section class="card">
+      <div class="card-head">
+        <h2>{{ 'Update Your Review' if my_review else 'Rate This Agent' }}</h2>
+      </div>
+
+      {% if not user %}
+        <div class="card-body">
+          <p class="muted">Sign in as a customer to submit a review.</p>
+          <a href="/login?next=/agents/{{ a.agent_id }}" class="btn btn-block">Sign In</a>
+        </div>
+      {% elif user.role != 'Customer' %}
+        <div class="card-body">
+          <p class="muted mb0">
+            You are signed in as {{ user.role }}. Only customer accounts can submit reviews.
+          </p>
+        </div>
+      {% else %}
+        <form method="post" action="/agents/{{ a.agent_id }}/review">
+          <div class="card-body">
+            {% if my_review %}
+              <p class="small muted">
+                You previously rated this agent {{ my_review.rating }}/5 on {{ my_review.review_date|datefmt }}. Submitting will update your review.
+              </p>
+            {% endif %}
+            <div class="field">
+              <label>Your Rating</label>
+              {{ rating_input("rating", my_review.rating if my_review else None) }}
+              <div class="help">Enforced by CHECK (rating BETWEEN 1 AND 5) constraint.</div>
+            </div>
+            <div class="field">
+              <label for="comments">Comments</label>
+              <textarea id="comments" name="comments"
+                        placeholder="Share your experience working with this agent...">{{ my_review.comments if my_review else '' }}</textarea>
+            </div>
+            <button class="btn btn-accent btn-block">
+              {{ 'Save Changes' if my_review else 'Submit Review' }}
+            </button>
+          </div>
+        </form>
+      {% endif %}
+    </section>
+
+    <!-- distribution -->
+    <section class="card">
+      <div class="card-head"><h3>Rating Distribution</h3>
+        <span class="hint">1 to 5 Stars</span></div>
+      <div class="card-body">
+        {% set peak = distribution|map(attribute='review_count')|map('int')|list|max
+                      if distribution else 0 %}
+        <div class="bars">
+          {% for d in distribution %}
+            {{ bar(d.rating ~ ' Stars', d.review_count|int, peak, d.review_count|int,
+                   'good' if d.rating|int >= 4 else ('warn' if d.rating|int == 3 else 'bad')) }}
+          {% endfor %}
+        </div>
+      </div>
+      <div class="card-foot">
+        Generates 1 to 5 star buckets so zero-count ratings remain visible in chart.
+      </div>
+    </section>
+
+    <!-- package cross-check -->
+    <section class="card">
+      <div class="card-head"><h3>Stored Function Cross-Check</h3></div>
+      <div class="card-body">
+        <table class="data">
+          <tbody>
+            <tr>
+              <td>Total sales from view</td>
+              <td class="num">{{ a.total_sales_value|money }}</td>
+            </tr>
+            <tr>
+              <td><code>fn_agent_total_sales</code></td>
+              <td class="num">{{ a.pkg_total_sales|money }}</td>
+            </tr>
+            <tr>
+              <td>Average rating from view</td>
+              <td class="num">{{ a.avg_rating or 0 }}</td>
+            </tr>
+            <tr>
+              <td><code>fn_agent_avg_rating</code></td>
+              <td class="num">{{ a.pkg_avg_rating or 0 }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card-foot">
+        Same metrics computed two ways: view aggregate subquery vs direct stored function call in the SELECT list.
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

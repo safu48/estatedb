@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+{% from "_macros.html" import empty, stat, bar %}
+{% block title %}Audit Log &middot; Admin Console{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Database Audit Trail</h1>
+    <p class="sub">
+      Not a single row in this audit log was written by web application code. Every record is generated automatically by MySQL triggers at the moment of change.
+    </p>
+  </div>
+  <nav class="tabs">
+    <a href="/admin">Dashboard</a>
+    <a href="/admin/users">Users</a>
+    <a href="/admin/properties">Properties</a>
+    <a href="/admin/transactions">Transactions</a>
+    <a href="/admin/inquiries">Inquiries</a>
+    <a href="/admin/lookups">Lookups</a>
+    <a class="on" href="/admin/audit">Audit Log</a>
+  </nav>
+</div>
+
+{% set by_action = {} %}
+{% for c in counts %}{% set _ = by_action.update({c.action: c.event_count}) %}{% endfor %}
+{% set total = counts|map(attribute='event_count')|map('int')|sum %}
+
+<div class="grid grid-4 mb3">
+  {{ stat("Total Events", total|num, "Since schema initialization") }}
+  {{ stat("Inserts", by_action.get('INSERT', 0), "Newly created rows", "good") }}
+  {{ stat("Updates", by_action.get('UPDATE', 0), "Modified records", "accent") }}
+  {{ stat("Deletes", by_action.get('DELETE', 0), "Purged rows", "bad") }}
+</div>
+
+<!-- ------------------------------------------------------------ action tabs -->
+<div class="between mb3">
+  <nav class="tabs">
+    <a href="/admin/audit" class="{{ 'on' if not active_action }}">
+      All Events <span class="faint">{{ total }}</span>
+    </a>
+    {% for a in ['INSERT', 'UPDATE', 'DELETE'] %}
+      <a href="/admin/audit?action={{ a }}"
+         class="{{ 'on' if active_action == a }}">
+        {{ a|title }} <span class="faint">{{ by_action.get(a, 0) }}</span>
+      </a>
+    {% endfor %}
+  </nav>
+  {% if active_action %}
+    <span class="chip">
+      Filter: {{ active_action|title }}
+      <a href="/admin/audit" title="Clear filter">&times;</a>
+    </span>
+  {% endif %}
+</div>
+
+<div class="grid grid-detail">
+
+  <!-- =============================================================== left -->
+  <div class="stack">
+    <section class="card">
+      <div class="card-head">
+        <h2>
+          {{ active_action|title ~ ' Events' if active_action else 'Recent Events' }}
+        </h2>
+        <span class="hint">Latest 100 entries</span>
+      </div>
+
+      {% if rows %}
+        <div class="table-wrap">
+          <table class="data">
+            <thead>
+              <tr>
+                <th>#</th><th>Timestamp</th><th>Table</th><th>Action</th>
+                <th class="num">Record ID</th><th>Changed By</th><th>Change Details</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in rows %}
+              <tr>
+                <td class="faint">{{ r.log_id }}</td>
+                <td class="nowrap small">{{ r.changed_at|datefmt('%d %b %Y, %H:%M:%S') }}</td>
+                <td><code>{{ r.table_name|lower }}</code></td>
+                <td>
+                  <span class="badge {{ 'badge-available' if r.action == 'INSERT'
+                                        else ('badge-pending' if r.action == 'UPDATE'
+                                              else 'badge-sold') }}">
+                    {{ r.action }}
+                  </span>
+                </td>
+                <td class="num faint">{{ r.record_id }}</td>
+                <td class="small">
+                  {% if r.changed_by %}
+                    <span class="mono tiny">{{ r.changed_by }}</span>
+                  {% else %}
+                    <span class="faint">--</span>
+                  {% endif %}
+                </td>
+                <td class="small muted">
+                  {% if r.change_details %}
+                    {{ r.change_details|string|truncate(110) }}
+                  {% else %}
+                    <span class="faint">No details captured</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="card-foot">
+          <code>changed_by</code> is captured via MySQL <code>USER()</code> &mdash; identifying the database user connection.
+        </div>
+      {% else %}
+        <div class="card-body">
+          {% if active_action %}
+            {{ empty("No " ~ active_action|lower ~ " events found.") }}
+            <p class="center mb0">
+              <a href="/admin/audit" class="btn btn-ghost btn-sm">View All Events</a>
+            </p>
+          {% else %}
+            {{ empty("Audit log is currently empty. Modify data to generate log records.") }}
+          {% endif %}
+        </div>
+      {% endif %}
+    </section>
+
+    <!-- ------------------------------------------------- the trigger ---- -->
+    <section class="card">
+      <div class="card-head">
+        <h2>Trigger Implementation on properties</h2>
+        <span class="hint">AFTER INSERT / UPDATE / DELETE</span>
+      </div>
+      <div class="card-body">
+        <pre class="sql">-- Executed as 3 distinct triggers in MySQL:
+CREATE TRIGGER trg_properties_ai AFTER INSERT ON properties ...
+CREATE TRIGGER trg_properties_au AFTER UPDATE ON properties ...
+CREATE TRIGGER trg_properties_ad AFTER DELETE ON properties ...</pre>
+        <p class="mb0 mt2">
+          Triggers use <code>NEW</code> and <code>OLD</code> pseudo-records to log exact before/after transitions, such as "<code>AVAILABLE-&gt;SOLD</code>".
+        </p>
+      </div>
+      <div class="card-foot">
+        <code>AFTER</code> triggers fire only when mutations succeed. Any failed statement automatically rolls back without leaving spurious audit entries.
+      </div>
+    </section>
+  </div>
+
+  <!-- ============================================================== right -->
+  <div class="stack">
+    <section class="card">
+      <div class="card-head">
+        <h2>Events by Action</h2>
+        <span class="hint">GROUP BY</span>
+      </div>
+      <div class="card-body">
+        {% if counts %}
+          {% set peak = counts|map(attribute='event_count')|map('int')|list|max %}
+          <div class="bars">
+            {% for a, tone in [('INSERT', 'good'), ('UPDATE', 'accent'),
+                               ('DELETE', 'bad')] %}
+              {{ bar(a|title, by_action.get(a, 0)|int, peak,
+                     by_action.get(a, 0)|int, tone) }}
+            {% endfor %}
+          </div>
+        {% else %}
+          {{ empty("No event data available.") }}
+        {% endif %}
+      </div>
+      <div class="card-foot">
+        Initial database seeding naturally produces the highest count of <code>INSERT</code> events.
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h3>Audited Tables &amp; Scope</h3></div>
+      <div class="table-wrap">
+        <table class="data">
+          <thead><tr><th>Table</th><th>Trigger Suite</th><th>Logged Information</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><code>properties</code></td>
+              <td><code class="tiny">trg_properties_*</code></td>
+              <td class="small muted">Inserts, updates, and deletes tracking price and status transitions.</td>
+            </tr>
+            <tr>
+              <td><code>transactions</code></td>
+              <td><code class="tiny">trg_txn_*</code></td>
+              <td class="small muted">Closed transactions with agreed prices and calculated commissions.</td>
+            </tr>
+            <tr>
+              <td><code>users</code></td>
+              <td><code class="tiny">trg_users_*</code></td>
+              <td class="small muted">New user registrations and changes to is_active, role_id, or email.</td>
+            </tr>
+            <tr>
+              <td><code>inquiries</code></td>
+              <td><code class="tiny">trg_inquiries_*</code></td>
+              <td class="small muted">Status progression throughout the customer pipeline.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card-foot">
+        Password hashes are intentionally omitted from audit logs to maintain security.
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h3>Why Audit at the Database Level?</h3></div>
+      <div class="card-body">
+        <p class="mb2">
+          Application-level logging only captures operations initiated via the web app. Mutations performed via phpMyAdmin, shell scripts, or administrative consoles would be completely missed.
+        </p>
+        <p class="mb0">
+          Database triggers cannot be bypassed. Regardless of the connection origin, audit records are written atomically within the same database transaction.
+        </p>
+      </div>
+      <div class="card-foot">
+        Explore live demonstrations in the
+        <a href="/database">SQL Showcase</a>.
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="sky7" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#a8cfe8"/><stop offset="100%" stop-color="#f0f6e9"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#sky7)"/>
+  <circle cx="690" cy="96" r="40" fill="#fff3c4"/>
+  <!-- rolling ground -->
+  <path d="M0 440c140-40 260 10 420-6s240-44 380-6v172H0z" fill="#7fb861"/>
+  <path d="M0 500c160-30 300 16 440 0s220-30 360-8v108H0z" fill="#6aa551"/>
+  <!-- cottage -->
+  <rect x="250" y="316" width="300" height="164" fill="#fdf6e7"/>
+  <path d="M224 322 400 196l176 126z" fill="#6f8f4f"/>
+  <path d="M400 196l176 126h-34L400 226z" fill="#5c7a41"/>
+  <!-- porch -->
+  <rect x="286" y="404" width="228" height="76" fill="#f3e9d3"/>
+  <rect x="374" y="392" width="56" height="88" rx="3" fill="#8b5a3c"/>
+  <g stroke="#c9b895" stroke-width="8"><path d="M300 404v76M500 404v76"/></g>
+  <g fill="#cfe8f6" stroke="#fff" stroke-width="5">
+    <rect x="296" y="342" width="62" height="52"/><rect x="446" y="342" width="62" height="52"/>
+  </g>
+  <path d="M327 342v52M296 368h62M477 342v52M446 368h62" stroke="#fff" stroke-width="5"/>
+  <!-- fence and hedges -->
+  <g stroke="#e8dcc0" stroke-width="8">
+    <path d="M60 500v-52M100 500v-52M140 500v-52M180 500v-52"/><path d="M50 466h140"/>
+  </g>
+  <circle cx="620" cy="452" r="38" fill="#4c8a3f"/><circle cx="668" cy="466" r="28" fill="#579a48"/>
+  <circle cx="120" cy="392" r="46" fill="#4c8a3f"/><rect x="113" y="410" width="14" height="50" fill="#7d5a38"/>
+</svg>

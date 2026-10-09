@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}My Agent Profile &middot; Agent Desk{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>My Agent Profile</h1>
+    <p class="sub">
+      Your name, email, and phone belong to the <code>users</code> table; professional credentials below are stored in the <code>agents</code> table, linked by a shared primary key.
+    </p>
+  </div>
+  <nav class="tabs">
+    <a href="/agent">Overview</a>
+    <a href="/agent/properties">Properties</a>
+    <a href="/agent/inquiries">Inquiries</a>
+    <a href="/agent/sales">Sales</a>
+    <a class="on" href="/agent/profile">Profile</a>
+  </nav>
+</div>
+
+<div class="grid grid-detail">
+
+  <div class="stack">
+    <section class="card">
+      <div class="card-head">
+        <h2>Professional Details</h2>
+        <span class="hint">UPDATE agents</span>
+      </div>
+      <form method="post" action="/agent/profile">
+        <div class="card-body">
+          <div class="field-row">
+            <div class="field">
+              <label for="agency_name">Agency</label>
+              <input id="agency_name" name="agency_name"
+                     value="{{ me.agency_name or '' }}"
+                     placeholder="Leave blank if independent">
+            </div>
+            <div class="field">
+              <label for="license_no">License Number *</label>
+              <input id="license_no" name="license_no" required
+                     value="{{ me.license_no }}">
+              <div class="help">
+                Must be unique among all agents &mdash; enforced by a UNIQUE constraint.
+              </div>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="commission_rate">Commission Rate (%) *</label>
+            <input id="commission_rate" name="commission_rate" type="number"
+                   required min="0" max="20" step="0.05"
+                   value="{{ me.commission_rate }}">
+            <div class="help">
+              Enforced by <code>CHECK (commission_rate BETWEEN 0 AND 20)</code> constraint.
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="bio">Bio &amp; Experience</label>
+            <textarea id="bio" name="bio" rows="7"
+                      placeholder="Share your background, years in real estate, specialized areas, and track record...">{{ me.bio or '' }}</textarea>
+            <div class="help">
+              Stored as a <code>TEXT</code> column displayed on your public agent profile.
+            </div>
+          </div>
+
+          <button class="btn btn-accent">Save Profile</button>
+        </div>
+      </form>
+      <div class="card-foot">
+        Adjusting commission rate applies to future transactions only. Past transaction commissions remain permanently locked by database triggers.
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Contact Information</h2>
+        <span class="hint">Stored in users table</span>
+      </div>
+      <div class="card-body">
+        <table class="data">
+          <tbody>
+            <tr><td>Name</td><td>{{ me.agent_name }}</td></tr>
+            <tr><td>Email</td><td>{{ me.email }}</td></tr>
+            <tr><td>Phone</td><td>{{ me.phone or '--' }}</td></tr>
+            <tr><td>Hire Date</td><td>{{ me.hire_date|datefmt('%d %B %Y') }}</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card-foot">
+        These fields belong to your core user account. <code>agents.agent_id</code> and <code>users.user_id</code> share the exact same ID value.
+      </div>
+    </section>
+  </div>
+
+  <!-- ----------------------------------------------------------- aside -->
+  <div class="stack">
+    <section class="card">
+      <div class="card-head"><h3>How Clients See You</h3></div>
+      <div class="card-body">
+        <div class="center mb2">
+          <span class="avatar lg" style="margin:0 auto">
+            {{ me.agent_name[:1]|upper }}
+          </span>
+          <h3 class="mt2 mb0">{{ me.agent_name }}</h3>
+          <div class="small muted">{{ me.agency_name or 'Independent Agent' }}</div>
+          <div class="mt1">
+            <span class="stars">{{ me.avg_rating|stars }}</span>
+            <div class="tiny faint">
+              {% if me.review_count %}
+                {{ me.avg_rating }} out of 5 ({{ me.review_count }} reviews)
+              {% else %}
+                No reviews yet
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        <div class="spec-grid">
+          <div><div class="k">Listings</div><div class="v">{{ me.total_listings }}</div></div>
+          <div><div class="k">Closed</div><div class="v">{{ me.closed_listings }}</div></div>
+          <div><div class="k">Total Sales</div>
+               <div class="v">{{ me.total_sales_value|money_short }}</div></div>
+          <div><div class="k">Commission</div><div class="v">{{ me.commission_rate }}%</div></div>
+        </div>
+      </div>
+      <div class="card-foot">
+        <a href="/agents/{{ me.agent_id }}">View Your Public Profile &rarr;</a>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h3>Field Architecture</h3></div>
+      <div class="table-wrap">
+        <table class="data">
+          <thead><tr><th>Field</th><th>Table</th><th>Managed By</th></tr></thead>
+          <tbody>
+            <tr><td>Full Name</td><td><code>users</code></td><td class="muted">Admin</td></tr>
+            <tr><td>Email</td><td><code>users</code></td><td class="muted">Admin</td></tr>
+            <tr><td>Phone</td><td><code>users</code></td><td class="muted">Admin</td></tr>
+            <tr><td>Password</td><td><code>users</code></td><td class="muted">Self</td></tr>
+            <tr><td>Agency</td><td><code>agents</code></td><td class="muted">Self</td></tr>
+            <tr><td>License</td><td><code>agents</code></td><td class="muted">Self</td></tr>
+            <tr><td>Commission Rate</td><td><code>agents</code></td><td class="muted">Self</td></tr>
+            <tr><td>Bio</td><td><code>agents</code></td><td class="muted">Self</td></tr>
+            <tr><td>Hire Date</td><td><code>agents</code></td><td class="muted">Immutable</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card-foot">
+        Agent creation requires atomic insertion into both tables to satisfy the <code>agents.agent_id</code> foreign key constraint.
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

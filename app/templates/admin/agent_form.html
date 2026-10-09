@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+{% block main_class %}wrap page{% endblock %}
+{% block title %}Add New Agent &middot; Admin Console{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Add New Agent</h1>
+    <p class="sub">
+      Agent accounts span two tables in a 1:1 relationship. Both rows are written in an atomic transaction &mdash; eliminating partial or orphaned account creation.
+    </p>
+  </div>
+  <nav class="tabs">
+    <a href="/admin">Dashboard</a>
+    <a href="/admin/users">Users</a>
+    <a href="/admin/properties">Properties</a>
+    <a href="/admin/transactions">Transactions</a>
+    <a href="/admin/inquiries">Inquiries</a>
+    <a href="/admin/lookups">Lookups</a>
+    <a href="/admin/audit">Audit Log</a>
+  </nav>
+</div>
+
+<form method="post" action="/admin/agents/new">
+  <div class="grid grid-detail">
+
+    <!-- ============================================================= left -->
+    <div class="stack">
+      <section class="card">
+        <div class="card-head">
+          <h2>Login Credentials</h2>
+          <span class="hint">INSERT INTO users</span>
+        </div>
+        <div class="card-body">
+          <div class="field-row">
+            <div class="field">
+              <label for="full_name">Full Name *</label>
+              <input id="full_name" name="full_name" required maxlength="100"
+                     placeholder="e.g. Sanjida Haque">
+            </div>
+            <div class="field">
+              <label for="username">Username *</label>
+              <input id="username" name="username" required maxlength="50"
+                     autocomplete="off" placeholder="e.g. shaque">
+              <div class="help">
+                <code>UNIQUE</code> &mdash; duplicate usernames are rejected by the database.
+              </div>
+            </div>
+          </div>
+
+          <div class="field-row">
+            <div class="field">
+              <label for="email">Email *</label>
+              <input id="email" name="email" type="email" required maxlength="100"
+                     placeholder="sanjida@estatedb.com">
+              <div class="help">Must also be <code>UNIQUE</code>.</div>
+            </div>
+            <div class="field">
+              <label for="phone">Phone Number</label>
+              <input id="phone" name="phone" maxlength="20"
+                     placeholder="01711000000">
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="password">Temporary Password *</label>
+            <input id="password" name="password" type="password" required
+                   minlength="6" autocomplete="new-password">
+            <div class="help">
+              Hashed using PBKDF2-HMAC-SHA256 prior to database storage.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Professional Details</h2>
+          <span class="hint">INSERT INTO agents</span>
+        </div>
+        <div class="card-body">
+          <div class="field-row">
+            <div class="field">
+              <label for="license_no">License Number *</label>
+              <input id="license_no" name="license_no" required maxlength="50"
+                     placeholder="BD-RE-90123">
+              <div class="help">
+                <code>UNIQUE</code> &mdash; no two agents can share the same license number.
+              </div>
+            </div>
+            <div class="field">
+              <label for="commission_rate">Commission Rate (%) *</label>
+              <input id="commission_rate" name="commission_rate" type="number"
+                   required min="0" max="20" step="0.05" value="2.5">
+              <div class="help">
+                <code>CHECK (commission_rate BETWEEN 0 AND 20)</code>
+              </div>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="agency_name">Agency</label>
+            <input id="agency_name" name="agency_name" maxlength="100"
+                   placeholder="Leave blank if independent">
+          </div>
+
+          <div class="field">
+            <label for="bio">Bio &amp; Experience</label>
+            <textarea id="bio" name="bio" rows="6"
+                      placeholder="Background, years in real estate, specializations, and territory..."></textarea>
+            <div class="help">
+              Stored as a <code>TEXT</code> column displayed on their public profile.
+            </div>
+          </div>
+
+          <button class="btn btn-accent btn-lg">Create Agent Account</button>
+          <a href="/admin/users?role=AGENT" class="btn btn-ghost mt2">Cancel</a>
+        </div>
+        <div class="card-foot">
+          <code>hire_date</code> defaults to CURRENT_DATE and <code>agent_id</code> inherits the generated user ID.
+        </div>
+      </section>
+    </div>
+
+    <!-- ============================================================ right -->
+    <div class="stack">
+      <section class="card">
+        <div class="card-head"><h3>Transaction Execution Flow</h3></div>
+        <div class="card-body">
+          <ol class="steps">
+            <li><b>Role Lookup:</b> Resolves <code>AGENT</code> <b>role_id</b> via subquery.</li>
+            <li><b>Insert User:</b> Inserts into <code>users</code> table and retrieves generated ID via <code>LAST_INSERT_ID()</code>.</li>
+            <li><b>Insert Agent:</b> Uses the user ID as primary and foreign key to insert into <code>agents</code>.</li>
+            <li><b>Atomic Commit:</b> Both records commit simultaneously.</li>
+          </ol>
+        </div>
+        <div class="card-foot">
+          If step 3 fails (e.g., duplicate license), step 2 automatically rolls back.
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h3>Shared Primary Key Architecture</h3></div>
+        <div class="card-body">
+          <pre class="sql">CREATE TABLE agents (
+  agent_id        INT PRIMARY KEY,
+  license_no      VARCHAR(50) NOT NULL UNIQUE,
+  agency_name     VARCHAR(100),
+  commission_rate DECIMAL(4,2) DEFAULT 2.50,
+  bio             TEXT,
+  hire_date       DATE DEFAULT (CURRENT_DATE),
+  CONSTRAINT fk_agents_user
+    FOREIGN KEY (agent_id)
+    REFERENCES users(user_id)
+);</pre>
+          <p class="small mb0 mt2">
+            <code>agent_id</code> serves simultaneously as primary key <b>and</b> foreign key, strictly enforcing 1:1 cardinalities.
+          </p>
+        </div>
+        <div class="card-foot">
+          Strict 3NF design eliminates redundant data between general users and agents.
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h3>Possible Database Errors</h3></div>
+        <div class="table-wrap">
+          <table class="data">
+            <thead><tr><th>Error Code</th><th>Cause</th></tr></thead>
+            <tbody>
+              <tr><td><code>Error 1062</code></td>
+                  <td class="small">Duplicate username, email, or license (UNIQUE constraint violated)</td></tr>
+              <tr><td><code>CHECK failed</code></td>
+                  <td class="small">Commission rate out of valid range (0% to 20%)</td></tr>
+              <tr><td><code>Error 1048</code></td>
+                  <td class="small">Required column omitted (NOT NULL violated)</td></tr>
+              <tr><td><code>Error 1406</code></td>
+                  <td class="small">Data exceeds column length definition</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+</form>
+{% endblock %}

@@ -1,0 +1,243 @@
+{% extends "base.html" %}
+{% from "_macros.html" import empty, stat, pager %}
+{% block title %}All Properties &middot; Admin Console{% endblock %}
+
+{% block content %}
+{# The router only puts non-empty filters in the dict, so rebuild the query
+   string here for the pager links. #}
+{% set qs = [] %}
+{% for k, v in filters.items() %}
+  {% set _ = qs.append(k ~ '=' ~ v|string|urlencode) %}
+{% endfor %}
+{% set base_query = qs|join('&') %}
+
+<div class="page-head">
+  <div>
+    <h1>All Properties</h1>
+    <p class="sub">
+      Properties across all agents. Up to six optional filters are dynamically composed into a parameterized <code>WHERE</code> clause with server-side pagination powered by native MySQL <b>LIMIT and OFFSET</b>.
+    </p>
+  </div>
+  <nav class="tabs">
+    <a href="/admin">Dashboard</a>
+    <a href="/admin/users">Users</a>
+    <a class="on" href="/admin/properties">Properties</a>
+    <a href="/admin/transactions">Transactions</a>
+    <a href="/admin/inquiries">Inquiries</a>
+    <a href="/admin/lookups">Lookups</a>
+    <a href="/admin/audit">Audit Log</a>
+  </nav>
+</div>
+
+<!-- ---------------------------------------------------------------- filters -->
+<section class="card mb3">
+  <div class="card-head">
+    <h2>Filter Properties</h2>
+    <span class="hint">{{ filters|length }} of 6 filters active</span>
+  </div>
+  <form method="get" action="/admin/properties">
+    <div class="card-body">
+      <div class="field-row-3">
+        <div class="field">
+          <label for="keyword">Keyword</label>
+          <input id="keyword" name="keyword" value="{{ filters.get('keyword', '') }}"
+                 placeholder="Title, address, or description">
+        </div>
+        <div class="field">
+          <label for="status">Status</label>
+          <select id="status" name="status">
+            <option value="">All Statuses</option>
+            {% for s in ['AVAILABLE', 'PENDING', 'SOLD', 'RENTED'] %}
+              <option value="{{ s }}"
+                      {{ 'selected' if filters.get('status') == s }}>{{ s|status_label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="listing_type">Offer Type</label>
+          <select id="listing_type" name="listing_type">
+            <option value="">All Offers</option>
+            <option value="SALE" {{ 'selected' if filters.get('listing_type') == 'SALE' }}>
+              For Sale</option>
+            <option value="RENT" {{ 'selected' if filters.get('listing_type') == 'RENT' }}>
+              For Rent</option>
+          </select>
+        </div>
+      </div>
+      <div class="field-row-3">
+        <div class="field">
+          <label for="city_id">City</label>
+          <select id="city_id" name="city_id">
+            <option value="">All Cities</option>
+            {% for c in cities %}
+              <option value="{{ c.city_id }}"
+                      {{ 'selected' if filters.get('city_id')|string == c.city_id|string }}>
+                {{ c.city_name }}, {{ c.state }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="type_id">Property Type</label>
+          <select id="type_id" name="type_id">
+            <option value="">All Types</option>
+            {% for t in types %}
+              <option value="{{ t.type_id }}"
+                      {{ 'selected' if filters.get('type_id')|string == t.type_id|string }}>
+                {{ t.type_name }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="agent_id">Assigned Agent</label>
+          <select id="agent_id" name="agent_id">
+            <option value="">Any Agent</option>
+            {% for a in agent_rows %}
+              <option value="{{ a.agent_id }}"
+                      {{ 'selected' if filters.get('agent_id')|string == a.agent_id|string }}>
+                {{ a.agent_name }} ({{ a.total_listings }})
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="row-tight mt2">
+        <button class="btn btn-accent btn-sm">Apply Filters</button>
+        {% if filters %}
+          <a href="/admin/properties" class="btn btn-ghost btn-sm">Reset All</a>
+        {% endif %}
+      </div>
+    </div>
+  </form>
+  <div class="card-foot">
+    Active filter criteria are injected into the <code>WHERE</code> clause with bound parameters, guarding against SQL injection.
+  </div>
+</section>
+
+<!-- ------------------------------------------------------------- headline -->
+<div class="grid grid-4 mb3">
+  {{ stat("Matches", total|num,
+          "Matching search criteria" if filters else "Total listings") }}
+  {{ stat("On This Page", rows|length, "Page " ~ page ~ " of " ~ total_pages) }}
+  {{ stat("Page Total",
+          (rows|map(attribute='price')|map('float')|sum)|money_short if rows else '--',
+          "Sum of current page prices", "accent") }}
+  {{ stat("Featured",
+          rows|selectattr('featured', 'equalto', 'Y')|list|length,
+          "Shown on homepage", "warn") }}
+</div>
+
+<!-- ----------------------------------------------------------------- table -->
+<section class="card">
+  <div class="card-head">
+    <h2>{{ total|num }} Listings</h2>
+    <span class="hint">v_property_listings, newest first</span>
+  </div>
+
+  {% if rows %}
+    <div class="table-wrap">
+      <table class="data">
+        <thead>
+          <tr>
+            <th>#</th><th>Property</th><th>Agent</th><th>Type</th>
+            <th class="num">Price</th><th>Status</th><th class="num">Saves</th>
+            <th>Added</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in rows %}
+          <tr>
+            <td class="faint">{{ p.property_id }}</td>
+            <td>
+              <a href="/property/{{ p.property_id }}"><b>{{ p.title }}</b></a>
+              <div class="tiny faint">
+                {{ p.address }} &middot; {{ p.city_name }}, {{ p.state }}
+              </div>
+            </td>
+            <td class="small">
+              <a href="/agents/{{ p.agent_id }}">{{ p.agent_name }}</a>
+            </td>
+            <td class="small">
+              {{ p.type_name }}
+              <div class="tiny faint">{{ 'For Sale' if p.listing_type == 'SALE' else 'For Rent' }}</div>
+            </td>
+            <td class="num">{{ p.price|money }}</td>
+            <td><span class="badge {{ p.status|status_class }}">{{ p.status|status_label }}</span></td>
+            <td class="num">{{ p.favorite_count }}</td>
+            <td class="nowrap small">{{ p.created_at|datefmt }}</td>
+            <td class="nowrap">
+              <form method="post" action="/admin/properties/{{ p.property_id }}/featured"
+                    class="inline-form">
+                <button class="btn btn-sm {{ '' if p.featured == 'Y' else 'btn-ghost' }}"
+                        title="Toggle featured status">
+                  {{ '&#9733;'|safe if p.featured == 'Y' else '&#9734;'|safe }}
+                </button>
+              </form>
+              <form method="post" action="/admin/properties/{{ p.property_id }}/delete"
+                    class="inline-form">
+                <button class="btn btn-sm btn-danger"
+                        data-confirm="Delete listing #{{ p.property_id }}? Associated images, amenities, and inquiries will be removed automatically via ON DELETE CASCADE.">
+                  Delete
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {{ pager(page, total_pages, base_query, "/admin/properties") }}
+  {% else %}
+    <div class="card-body">
+      {{ empty("No properties found matching these filters.") }}
+      <p class="center mb0">
+        <a href="/admin/properties" class="btn btn-ghost btn-sm">Reset Filters</a>
+      </p>
+    </div>
+  {% endif %}
+</section>
+
+<section class="card mt3">
+  <div class="card-head">
+    <h2>Deletion Cascading &amp; Integrity Protection</h2>
+    <span class="hint">ON DELETE CASCADE vs. Foreign Key Restriction</span>
+  </div>
+  <div class="card-body">
+    <div class="grid grid-2">
+      <div>
+        <p class="mb2">
+          Four dependent child tables link to <code>properties</code> via <code>ON DELETE CASCADE</code>, ensuring clean automated cleanup:
+        </p>
+        <table class="data">
+          <tbody>
+            <tr><td><code>property_images</code></td>
+                <td class="muted small">Photos attached to this listing are purged</td></tr>
+            <tr><td><code>property_amenities</code></td>
+                <td class="muted small">Amenity junction links are removed</td></tr>
+            <tr><td><code>favorites</code></td>
+                <td class="muted small">Removed from customer saved lists</td></tr>
+            <tr><td><code>inquiries</code></td>
+                <td class="muted small">Customer inquiry messages are deleted</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div>
+        <p class="mb2">
+          However, <code>transactions</code> deliberately enforces <b>NO CASCADE</b>. Completed financial transactions cannot be orphaned:
+        </p>
+        <pre class="sql">Error 1451: Cannot delete or update a parent row:
+a foreign key constraint fails (`estatedb`.`transactions`,
+CONSTRAINT `fk_txn_prop` FOREIGN KEY (`property_id`))</pre>
+        <p class="mb0 mt2">
+          Completed deal records can never be deleted. Attempting to delete a sold/rented listing is blocked directly by MySQL.
+        </p>
+      </div>
+    </div>
+  </div>
+  <div class="card-foot">
+    These integrity constraints are maintained by MySQL itself, enforcing consistency across both the web application and external SQL clients.
+  </div>
+</section>
+{% endblock %}

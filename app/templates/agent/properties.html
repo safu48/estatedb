@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% from "_macros.html" import empty, stat %}
+{% block title %}My Properties &middot; Agent Desk{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>My Properties</h1>
+    <p class="sub">
+      Manage your property listings: create, edit, change status, toggle featured, and delete.
+    </p>
+  </div>
+  <nav class="tabs">
+    <a href="/agent">Overview</a>
+    <a class="on" href="/agent/properties">Properties</a>
+    <a href="/agent/inquiries">Inquiries</a>
+    <a href="/agent/sales">Sales</a>
+    <a href="/agent/profile">Profile</a>
+  </nav>
+</div>
+
+<div class="between mb3">
+  <div class="row-tight">
+    {{ stat("Total", rows|length, "Listings") }}
+    {{ stat("Available", rows|selectattr('status', 'equalto', 'AVAILABLE')|list|length,
+            "On market", "good") }}
+    {{ stat("Pending", rows|selectattr('status', 'equalto', 'PENDING')|list|length,
+            "Under contract", "warn") }}
+    {{ stat("Closed",
+            rows|selectattr('status', 'in', ['SOLD', 'RENTED'])|list|length,
+            "Sold or rented", "accent") }}
+  </div>
+  <a href="/agent/properties/new" class="btn btn-accent btn-lg">+ Add New Property</a>
+</div>
+
+{% if rows %}
+  <section class="card">
+    <div class="card-head">
+      <h2>{{ rows|length }} Listings</h2>
+      <span class="hint">Filtered by agent_id from v_property_listings</span>
+    </div>
+    <div class="table-wrap">
+      <table class="data">
+        <thead>
+          <tr>
+            <th>#</th><th>Title</th><th>City</th><th>Type</th>
+            <th class="num">Price</th><th class="num">Beds</th>
+            <th>Offer</th><th>Status</th>
+            <th class="num">Saves</th><th class="num">Amenities</th>
+            <th>Featured</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in rows %}
+          <tr>
+            <td class="faint">{{ p.property_id }}</td>
+            <td>
+              <a href="/property/{{ p.property_id }}">{{ p.title|truncate_words(6) }}</a>
+              <div class="tiny faint">{{ p.address|truncate_words(5) }}</div>
+            </td>
+            <td>{{ p.city_name }}</td>
+            <td>{{ p.type_name }}</td>
+            <td class="num">{{ p.price|money }}</td>
+            <td class="num">{{ p.bedrooms }}</td>
+            <td><span class="badge {{ p.listing_type|status_class }}">
+                {{ 'For Sale' if p.listing_type == 'SALE' else 'For Rent' }}</span></td>
+
+            <td>
+              <form method="post" action="/agent/properties/{{ p.property_id }}/status"
+                    data-autosubmit class="inline-form">
+                <select name="status" aria-label="Status for listing {{ p.property_id }}">
+                  {% for s in ['AVAILABLE', 'PENDING', 'SOLD', 'RENTED'] %}
+                    <option value="{{ s }}" {{ 'selected' if p.status == s }}>
+                      {{ s|status_label }}
+                    </option>
+                  {% endfor %}
+                </select>
+              </form>
+            </td>
+
+            <td class="num">{{ p.favorite_count }}</td>
+            <td class="num">{{ p.amenity_count }}</td>
+
+            <td>
+              <form method="post" action="/agent/properties/{{ p.property_id }}/featured"
+                    class="inline-form">
+                <button class="btn btn-sm {{ 'btn-accent' if p.featured == 'Y' else 'btn-ghost' }}"
+                        title="Toggle featured status">
+                  {{ 'Yes' if p.featured == 'Y' else 'No' }}
+                </button>
+              </form>
+            </td>
+
+            <td class="nowrap">
+              <a href="/agent/properties/{{ p.property_id }}/edit"
+                 class="btn btn-sm btn-ghost">Edit</a>
+              <form method="post" action="/agent/properties/{{ p.property_id }}/delete"
+                    class="inline-form"
+                    data-confirm="Delete listing #{{ p.property_id }}? Associated photos and amenities will be removed via ON DELETE CASCADE.">
+                <button class="btn btn-sm btn-danger-ghost">Delete</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr class="total-row">
+            <td colspan="4">Portfolio Total Value</td>
+            <td class="num">
+              {{ rows|map(attribute='price')|map('float')|sum|money }}
+            </td>
+            <td colspan="3"></td>
+            <td class="num">{{ rows|map(attribute='favorite_count')|map('int')|sum }}</td>
+            <td colspan="3"></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    <div class="card-foot">
+      Status changes execute an immediate <code>UPDATE</code> and trigger <code>trg_properties_audit</code> to record previous and new values in <code>audit_log</code>.
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------ what can fail -->
+  <section class="card mt3">
+    <div class="card-head">
+      <h2>Database Integrity Rules</h2>
+      <span class="hint">Schema constraints</span>
+    </div>
+    <div class="table-wrap">
+      <table class="data">
+        <thead>
+          <tr><th>If you attempt to...</th><th>MySQL Response</th><th>Constraint Reason</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Delete a listing with transaction history</td>
+            <td class="mono">Error 1451</td>
+            <td><code>transactions</code> foreign key has NO CASCADE. Completed financial transactions cannot be deleted.</td>
+          </tr>
+          <tr>
+            <td>Set an invalid status string</td>
+            <td class="mono">CHECK failed</td>
+            <td><code>CHECK (status IN ('AVAILABLE','PENDING','SOLD','RENTED'))</code></td>
+          </tr>
+          <tr>
+            <td>Set a negative or zero price</td>
+            <td class="mono">CHECK failed</td>
+            <td><code>CHECK (price &gt; 0)</code></td>
+          </tr>
+          <tr>
+            <td>Reference a non-existent city ID</td>
+            <td class="mono">Error 1452</td>
+            <td><code>city_id</code> foreign key constraint fails.</td>
+          </tr>
+          <tr>
+            <td>Save without a title</td>
+            <td class="mono">Error 1048</td>
+            <td>Title column is defined as <code>NOT NULL</code>.</td>
+          </tr>
+          <tr>
+            <td>Edit another agent's listing via URL</td>
+            <td class="mono">Redirect</td>
+            <td>Application verifies ownership with <code>_owns()</code> before executing SQL.</td>
+          </tr>
+        </tbody>
+        <caption>
+          Listings with photos and amenities can be deleted directly because their child tables use <code>ON DELETE CASCADE</code>.
+        </caption>
+      </table>
+    </div>
+  </section>
+{% else %}
+  <div class="card">
+    {{ empty("You have no property listings yet.") }}
+    <div class="card-foot center">
+      <a href="/agent/properties/new" class="btn btn-accent">Add First Listing</a>
+    </div>
+  </div>
+{% endif %}
+{% endblock %}

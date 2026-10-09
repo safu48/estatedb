@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% from "_macros.html" import empty %}
+{% block title %}SQL Techniques Showcase{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>SQL Showcase (Live Query Results)</h1>
+    <p class="sub">
+      Executed {{ results|length }} SQL queries live against PostgreSQL as this page loaded.
+      Each query statement and its real-time output are displayed below.
+    </p>
+  </div>
+  <div class="result-count">
+    <b>{{ results|rejectattr('error')|list|length }}</b> Passed &middot;
+    <b>{{ results|selectattr('error')|list|length }}</b> Failed
+  </div>
+</div>
+
+<!-- ------------------------------------------------------------------- toc -->
+<nav class="toc mb3">
+  <span class="faint small">Categories:</span>
+  {% for g in groups %}
+    <a href="#{{ g|replace(' ', '-')|replace('/', '-')|lower }}">{{ g }}</a>
+  {% endfor %}
+</nav>
+
+{% if not results %}
+  {{ empty("No SQL demos configured.") }}
+{% endif %}
+
+{% for g in groups %}
+  {% set demos = results|selectattr('group', 'equalto', g)|list %}
+  <h2 class="group-title" id="{{ g|replace(' ', '-')|replace('/', '-')|lower }}">
+    {{ g }}
+    <span class="faint small">
+      {{ demos|length }} statements
+    </span>
+  </h2>
+
+  <div class="stack mb3">
+    {% for d in demos %}
+      <section class="card technique">
+        <div class="card-head">
+          <h3 class="mb0">{{ d.title }}</h3>
+          {% if d.error %}
+            <span class="badge badge-bad">Failed</span>
+          {% else %}
+            <span class="hint">
+              {{ d.row_count }} rows
+              {% if d.row_count > 25 %}<span class="faint">(First 25 rows shown)</span>{% endif %}
+            </span>
+          {% endif %}
+        </div>
+
+        <div class="card-body">
+          <p class="sql-note">{{ d.note }}</p>
+          <pre class="sql">{{ d.sql }}</pre>
+
+          {% if d.error %}
+            <div class="alert-bad mt2">
+              <b>PostgreSQL rejected this query:</b>
+              <div class="mono small mt1">{{ d.error }}</div>
+              <div class="small mt1">
+                Verify that database tables and views were created properly in <code>sql/</code>.
+              </div>
+            </div>
+
+          {% elif not d.rows %}
+            <div class="alert-info mt2">
+              Valid query, but returned 0 rows. (Common when tables are empty).
+            </div>
+
+          {% else %}
+            <div class="table-wrap mt2">
+              <table class="data">
+                <thead>
+                  <tr>
+                    {% for col in d.columns %}
+                      <th>{{ col|lower }}</th>
+                    {% endfor %}
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for row in d.rows %}
+                    <tr>
+                      {% for col in d.columns %}
+                        {% set cell = row[col] %}
+                        <td class="{{ 'num' if cell is number }}">
+                          {% if cell is none %}
+                            <span class="faint">(null)</span>
+                          {% elif cell is number %}
+                            {{ cell|num }}
+                          {% else %}
+                            {{ cell|string|truncate(90) }}
+                          {% endif %}
+                        </td>
+                      {% endfor %}
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% endif %}
+        </div>
+      </section>
+    {% endfor %}
+  </div>
+{% endfor %}
+
+<!-- ------------------------------------------------------------ statements -->
+<section class="card">
+  <div class="card-head">
+    <h2>Purpose of This Showcase</h2>
+    <span class="hint">Project Demonstration</span>
+  </div>
+  <div class="card-body">
+    <p>
+      On real-world web pages, SQL queries execute behind the scenes. This showcase renders each SQL statement side-by-side with its live output table, making it easy to examine and grade database techniques without inspecting source code.
+    </p>
+    <p class="mb0">
+      Every statement runs in an isolated <code>try</code> block so a failing query displays an error card without crashing the entire page. Nothing is cached -- refreshing re-runs all live queries against PostgreSQL.
+    </p>
+  </div>
+  <div class="card-foot">
+    Mutating statements (such as <code>INSERT</code>, <code>UPDATE</code>,
+    <code>DELETE</code>, and <code>sp_record_sale</code>) are deliberately omitted from this page to avoid creating unwanted records on every page refresh.
+  </div>
+</section>
+{% endblock %}

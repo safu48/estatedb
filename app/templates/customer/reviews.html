@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% from "_macros.html" import empty, stat, bar %}
+{% block title %}My Reviews{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>My Reviews</h1>
+    <p class="sub">
+      Ratings and feedback submitted to agents. At most one per agent enforced by
+      <code>UNIQUE (agent_id, customer_id)</code>.
+    </p>
+  </div>
+  <nav class="tabs">
+    <a href="/me">Overview</a>
+    <a href="/me/favorites">Saved Properties</a>
+    <a href="/me/inquiries">Inquiries</a>
+    <a class="on" href="/me/reviews">My Reviews</a>
+    <a href="/me/profile">Profile</a>
+  </nav>
+</div>
+
+{% if rows %}
+  {% set ratings = rows|map(attribute='rating')|map('int')|list %}
+  <div class="grid grid-4 mb3">
+    {{ stat("Reviews Given", rows|length, "One per agent") }}
+    {{ stat("Average Score", '%.1f'|format(ratings|sum / ratings|length),
+            "Out of 5 stars", "accent") }}
+    {{ stat("Highest Rating", ratings|max ~ " / 5", "Your top score", "good") }}
+    {{ stat("Lowest Rating", ratings|min ~ " / 5", "Your lowest score", "bad") }}
+  </div>
+
+  <div class="grid grid-detail">
+    <div class="stack">
+      {% for r in rows %}
+        <section class="card">
+          <div class="card-head">
+            <div class="agent-box">
+              <span class="avatar">{{ r.agent_name[:1]|upper }}</span>
+              <div>
+                <a href="/agents/{{ r.agent_id }}"><b>{{ r.agent_name }}</b></a>
+                <div class="tiny faint">{{ r.agency_name or 'Independent Agent' }}</div>
+              </div>
+            </div>
+            <div class="right">
+              <span class="stars">{{ r.rating|stars }}</span>
+              <div class="tiny faint">{{ r.review_date|datefmt }}</div>
+            </div>
+          </div>
+
+          <div class="card-body">
+            {% if r.comments %}
+              <p class="mb0" style="white-space:pre-line">{{ r.comments }}</p>
+            {% else %}
+              <p class="mb0 faint"><i>Rating provided without comments.</i></p>
+            {% endif %}
+          </div>
+
+          <div class="card-foot between">
+            <span class="small faint">Review #{{ r.review_id }}</span>
+            <span class="row-tight">
+              <a href="/agents/{{ r.agent_id }}" class="btn btn-sm btn-ghost">
+                Edit on Agent Profile
+              </a>
+              <form method="post" action="/me/reviews/{{ r.review_id }}/delete"
+                    class="inline-form"
+                    data-confirm="Delete your review for {{ r.agent_name }}?">
+                <button class="btn btn-sm btn-danger-ghost">Delete</button>
+              </form>
+            </span>
+          </div>
+        </section>
+      {% endfor %}
+    </div>
+
+    <div class="stack">
+      <section class="card">
+        <div class="card-head"><h3>Rating Breakdown</h3></div>
+        <div class="card-body">
+          {% set counts = [] %}
+          {% for n in [5, 4, 3, 2, 1] %}
+            {% set _ = counts.append(ratings|select('equalto', n)|list|length) %}
+          {% endfor %}
+          {% set peak = counts|max %}
+          <div class="bars">
+            {% for n in [5, 4, 3, 2, 1] %}
+              {% set c = ratings|select('equalto', n)|list|length %}
+              {{ bar(n ~ ' Stars', c, peak, c,
+                     'good' if n >= 4 else ('warn' if n == 3 else 'bad')) }}
+            {% endfor %}
+          </div>
+        </div>
+        <div class="card-foot">
+          Counted in-memory in Jinja -- no additional query needed.
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h3>Review Ownership Security</h3></div>
+        <div class="card-body small">
+          <p>
+            The underlying <code>DELETE</code> checks both the review ID and your own session user ID:
+          </p>
+          <pre class="sql">DELETE FROM reviews
+ WHERE review_id  = :rid
+   AND customer_id = :cid</pre>
+          <p class="mb0">
+            Ownership validation directly inside the <code>WHERE</code> clause prevents unauthorized tampering.
+          </p>
+        </div>
+      </section>
+    </div>
+  </div>
+{% else %}
+  <div class="card">
+    {{ empty("You have not reviewed any agents yet.", "&#9734;") }}
+    <div class="card-foot center">
+      <a href="/agents" class="btn">View Agent Directory</a>
+    </div>
+  </div>
+{% endif %}
+{% endblock %}

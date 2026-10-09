@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+{% from "_macros.html" import prop_card, pager, empty %}
+{% block title %}Property Listings{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Property Listings</h1>
+    <p class="sub">
+      Search properties with dynamic WHERE filters; paginated using PostgreSQL native
+      <b>LIMIT and OFFSET</b>.
+    </p>
+  </div>
+  <div class="result-count">
+    <b>{{ total|num }}</b> results
+    {% if total %}&middot; Page {{ page }} / {{ total_pages }}{% endif %}
+  </div>
+</div>
+
+<div class="grid grid-sidebar">
+
+  <!-- ------------------------------------------------------ filter panel -->
+  <form class="filters" method="get" action="/listings">
+    <input type="hidden" name="sort" value="{{ sort }}">
+    <div class="card">
+      <div class="card-head"><h2>Filters</h2>
+        {% if filters %}<a href="/listings" class="hint">Clear All</a>{% endif %}
+      </div>
+      <div class="card-body">
+        <div>
+          <label for="keyword">Keyword</label>
+          <input id="keyword" type="search" name="keyword"
+                 value="{{ filters.keyword or '' }}"
+                 placeholder="Title, area, or keywords...">
+          <div class="help">Searches title, address and description via LIKE query.</div>
+        </div>
+
+        <div>
+          <label for="city_id">City</label>
+          <select id="city_id" name="city_id">
+            <option value="">All Cities</option>
+            {% for c in cities %}
+              <option value="{{ c.city_id }}"
+                {{ 'selected' if filters.city_id == c.city_id|string }}>
+                {{ c.city_name }} ({{ c.state }})
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div>
+          <label for="type_id">Property Type</label>
+          <select id="type_id" name="type_id">
+            <option value="">All Types</option>
+            {% for t in types %}
+              <option value="{{ t.type_id }}"
+                {{ 'selected' if filters.type_id == t.type_id|string }}>
+                {{ t.type_name }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div>
+          <label for="listing_type">Offer Type</label>
+          <select id="listing_type" name="listing_type">
+            <option value="">Sale or Rent</option>
+            <option value="SALE" {{ 'selected' if filters.listing_type == 'SALE' }}>For Sale</option>
+            <option value="RENT" {{ 'selected' if filters.listing_type == 'RENT' }}>For Rent</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="status">Status</label>
+          <select id="status" name="status">
+            <option value="">All Statuses</option>
+            {% for s in ['AVAILABLE', 'PENDING', 'SOLD', 'RENTED'] %}
+              <option value="{{ s }}" {{ 'selected' if filters.status == s }}>{{ s|status_label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="field-row">
+          <div>
+            <label for="min_price">Min Price</label>
+            <input id="min_price" type="number" name="min_price" min="0" step="1000"
+                   value="{{ filters.min_price or '' }}"
+                   placeholder="{{ price_range.min_price|int }}">
+          </div>
+          <div>
+            <label for="max_price">Max Price</label>
+            <input id="max_price" type="number" name="max_price" min="0" step="1000"
+                   value="{{ filters.max_price or '' }}"
+                   placeholder="{{ price_range.max_price|int }}">
+          </div>
+        </div>
+
+        <div class="field-row-3">
+          <div>
+            <label for="bedrooms">Beds +</label>
+            <input id="bedrooms" type="number" name="bedrooms" min="0" max="10"
+                   value="{{ filters.bedrooms or '' }}">
+          </div>
+          <div>
+            <label for="bathrooms">Baths +</label>
+            <input id="bathrooms" type="number" name="bathrooms" min="0" max="10"
+                   value="{{ filters.bathrooms or '' }}">
+          </div>
+          <div>
+            <label for="min_area">Sqft +</label>
+            <input id="min_area" type="number" name="min_area" min="0" step="50"
+                   value="{{ filters.min_area or '' }}">
+          </div>
+        </div>
+
+        <div>
+          <label for="amenity_id">Amenity</label>
+          <select id="amenity_id" name="amenity_id">
+            <option value="">Any Amenity</option>
+            {% for a in amenities %}
+              <option value="{{ a.amenity_id }}"
+                {{ 'selected' if filters.amenity_id == a.amenity_id|string }}>
+                {{ a.amenity_name }}
+              </option>
+            {% endfor %}
+          </select>
+          <div class="help">Filtered via EXISTS subquery on property_amenities table.</div>
+        </div>
+
+        <label class="check">
+          <input type="checkbox" name="featured" value="1"
+                 {{ 'checked' if filters.featured }}>
+          Featured properties only
+        </label>
+      </div>
+      <div class="card-foot">
+        <button class="btn btn-block">Apply Filters</button>
+      </div>
+    </div>
+  </form>
+
+  <!-- ---------------------------------------------------------- results -->
+  <div>
+    <div class="between mb2">
+      <div class="row-tight">
+        {% if filters.keyword %}<span class="chip">"{{ filters.keyword }}"</span>{% endif %}
+        {% for c in cities if filters.city_id == c.city_id|string %}
+          <span class="chip">{{ c.city_name }}</span>
+        {% endfor %}
+        {% for t in types if filters.type_id == t.type_id|string %}
+          <span class="chip">{{ t.type_name }}</span>
+        {% endfor %}
+        {% if filters.listing_type %}<span class="chip">{{ 'For Sale' if filters.listing_type == 'SALE' else 'For Rent' }}</span>{% endif %}
+        {% if filters.status %}<span class="chip">{{ filters.status|status_label }}</span>{% endif %}
+        {% if filters.featured %}<span class="chip">Featured</span>{% endif %}
+        {% if filters.bedrooms %}<span class="chip">{{ filters.bedrooms }}+ Beds</span>{% endif %}
+        {% if filters.min_price or filters.max_price %}
+          <span class="chip">
+            {{ filters.min_price|int|money if filters.min_price else 'Any' }}
+            &ndash;
+            {{ filters.max_price|int|money if filters.max_price else 'Any' }}
+          </span>
+        {% endif %}
+      </div>
+
+      <form method="get" action="/listings" data-autosubmit style="min-width:210px">
+        {% for k, v in filters.items() %}
+          <input type="hidden" name="{{ k }}" value="{{ v }}">
+        {% endfor %}
+        <select name="sort" aria-label="Sort order">
+          <option value="newest"     {{ 'selected' if sort == 'newest' }}>Newest First</option>
+          <option value="oldest"     {{ 'selected' if sort == 'oldest' }}>Oldest First</option>
+          <option value="price_asc"  {{ 'selected' if sort == 'price_asc' }}>Price: Low to High</option>
+          <option value="price_desc" {{ 'selected' if sort == 'price_desc' }}>Price: High to Low</option>
+          <option value="area_desc"  {{ 'selected' if sort == 'area_desc' }}>Area: Large to Small</option>
+          <option value="beds_desc"  {{ 'selected' if sort == 'beds_desc' }}>Bedrooms: High to Low</option>
+        </select>
+      </form>
+    </div>
+
+    {% if rows %}
+      <div class="grid grid-cards">
+        {% for p in rows %}
+          {{ prop_card(p, favorite_ids, user, "/listings?" ~ base_query ~ "&page=" ~ page) }}
+        {% endfor %}
+      </div>
+      {{ pager(page, total_pages, base_query, "/listings") }}
+    {% else %}
+      <div class="card">
+        {{ empty("No properties match your filter criteria. Try expanding your search or clearing filters.") }}
+        <div class="card-foot center">
+          <a href="/listings" class="btn btn-ghost btn-sm">Reset Filters</a>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

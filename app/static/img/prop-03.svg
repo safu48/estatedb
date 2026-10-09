@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="sky3" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f6b47f"/><stop offset="55%" stop-color="#f7d9b6"/><stop offset="100%" stop-color="#efeae1"/>
+    </linearGradient>
+    <linearGradient id="glass3" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#7fb8d8"/><stop offset="100%" stop-color="#c9e6f2"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#sky3)"/>
+  <circle cx="600" cy="150" r="60" fill="#ffd79a" opacity=".8"/>
+  <!-- stacked modern volumes -->
+  <rect x="120" y="330" width="380" height="200" fill="#f4f1ea"/>
+  <rect x="300" y="200" width="380" height="150" fill="#e4ded2"/>
+  <rect x="120" y="318" width="392" height="16" fill="#cfc7b8"/>
+  <rect x="300" y="188" width="392" height="16" fill="#cfc7b8"/>
+  <!-- glazing -->
+  <rect x="150" y="360" width="230" height="130" fill="url(#glass3)"/>
+  <rect x="330" y="226" width="320" height="100" fill="url(#glass3)"/>
+  <g stroke="#f4f1ea" stroke-width="8">
+    <path d="M226 360v130M302 360v130M436 226v100M540 226v100"/>
+  </g>
+  <!-- terrace rail -->
+  <path d="M120 330h180" stroke="#a89f8d" stroke-width="6"/>
+  <g stroke="#a89f8d" stroke-width="4"><path d="M140 330v-26M180 330v-26M220 330v-26M260 330v-26"/></g>
+  <path d="M132 304h150" stroke="#a89f8d" stroke-width="5"/>
+  <rect x="0" y="530" width="800" height="70" fill="#c9c2b2"/>
+  <ellipse cx="640" cy="512" rx="70" ry="16" fill="#b7ae9c" opacity=".6"/>
+  <circle cx="720" cy="470" r="46" fill="#5c8f5a"/><rect x="713" y="490" width="14" height="42" fill="#7a5a3a"/>
+</svg>

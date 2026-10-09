@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EstateDB &mdash; PostgreSQL Database Offline</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<!-- Standalone page: renders even when database is down -->
+<header class="site-header">
+  <div class="wrap bar">
+    <a class="brand" href="/">
+      <span class="brand-mark">ED</span>
+      <span>EstateDB<small>PostgreSQL &middot; Render</small></span>
+    </a>
+    <span class="badge badge-bad">Database Offline</span>
+  </div>
+</header>
+
+<main class="wrap page narrow">
+  <div class="page-head">
+    <div>
+      <h1>Could Not Connect to PostgreSQL Database</h1>
+      <p class="sub">
+        The web server is running, but the PostgreSQL connection could not be established.
+        Review the details and configuration checklist below.
+      </p>
+    </div>
+  </div>
+
+  <section class="card mb3">
+    <div class="card-head">
+      <h2>Database Error Details</h2>
+      <span class="hint">Raw Driver Message</span>
+    </div>
+    <div class="card-body">
+      <pre class="sql">{{ message }}</pre>
+    </div>
+  </section>
+
+  <section class="card mb3">
+    <div class="card-head">
+      <h2>Active Configuration</h2>
+      <span class="hint">.env / Environment Variables</span>
+    </div>
+    <div class="table-wrap">
+      <table class="data">
+        <tbody>
+          <tr><td>Host</td><td><code>{{ settings.DB_HOST }}</code></td></tr>
+          <tr><td>Port</td><td><code>{{ settings.DB_PORT }}</code></td></tr>
+          <tr><td>Database</td><td><code>{{ settings.DB_NAME }}</code></td></tr>
+          <tr><td>User</td><td><code>{{ settings.DB_USER }}</code></td></tr>
+          <tr><td>Password</td><td class="faint"><code>{{ '***' if settings.DB_PASSWORD else '(empty)' }}</code></td></tr>
+          <tr><td>Driver</td><td><code>psycopg 3 (PostgreSQL adapter)</code></td></tr>
+          <tr><td>SSL Enabled</td><td><code>{{ 'true' if settings.DB_SSL else 'false' }}</code></td></tr>
+        </tbody>
+        <caption>
+          To change connection parameters, set <code>DATABASE_URL</code> or edit <code>.env</code>.
+        </caption>
+      </table>
+    </div>
+  </section>
+
+  <div class="grid grid-2">
+    <section class="card">
+      <div class="card-head"><h2>Render / Cloud Deployment</h2></div>
+      <div class="card-body">
+        <ol class="steps">
+          <li><b>Using Render PostgreSQL?</b> Render automatically sets the <code>DATABASE_URL</code> environment variable when you link a database to this service.</li>
+          <li><b>Schema Initialization:</b> Run the build script once to seed your database:
+              <br><br><code>python scripts/init_db.py</code><br><br>
+              The application also automatically runs schema setup on first boot if tables are missing.</li>
+          <li><b>Connecting from Outside Render:</b> Ensure <code>DB_SSL=true</code> or <code>?sslmode=require</code> is appended to the external connection string.</li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Local PostgreSQL Checklist</h2></div>
+      <div class="card-body">
+        <ol class="steps">
+          <li><b>Is PostgreSQL service running?</b> Start PostgreSQL via Services or command line.</li>
+          <li><b>Default Port:</b> PostgreSQL uses port <code>5432</code> by default.</li>
+          <li><b>Run Setup Script:</b>
+              <br><br><code>python scripts/init_db.py</code><br><br>
+              This creates tables, triggers, views, stored procedures and demo data.</li>
+          <li><b>Start the web server:</b>
+              <br><br><code>python run.py</code></li>
+        </ol>
+      </div>
+    </section>
+  </div>
+
+  <p class="center mt3">
+    <a href="/" class="btn">Try Again</a>
+  </p>
+  <p class="center small faint">
+    Restart the server with <code>python run.py</code> after starting PostgreSQL.
+  </p>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap center small faint">
+    EstateDB &middot; University Database Project &middot; PostgreSQL
+  </div>
+</footer>
+</body>
+</html>

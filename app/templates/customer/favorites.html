@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% from "_macros.html" import prop_card, empty, stat %}
+{% block title %}Saved Properties{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Saved Properties</h1>
+    <p class="sub">
+      Your favorites list stored in the <code>favorites</code> junction table
+      with composite primary key <code>(user_id, property_id)</code>.
+    </p>
+  </div>
+  <nav class="tabs">
+    <a href="/me">Overview</a>
+    <a class="on" href="/me/favorites">Saved Properties</a>
+    <a href="/me/inquiries">Inquiries</a>
+    <a href="/me/reviews">My Reviews</a>
+    <a href="/me/profile">Profile</a>
+  </nav>
+</div>
+
+{% if rows %}
+  <div class="grid grid-4 mb3">
+    {{ stat("Total Saved", rows|length, "Properties in your favorites") }}
+    {{ stat("Available",
+            rows|selectattr('status', 'equalto', 'AVAILABLE')|list|length,
+            "Ready for inquiry", "good") }}
+    {{ stat("Off Market",
+            rows|rejectattr('status', 'equalto', 'AVAILABLE')|list|length,
+            "Sold, rented or pending", "bad") }}
+    {{ stat("Lowest Price",
+            (rows|map(attribute='price')|map('float')|list|min)|money_short,
+            "Minimum among favorites", "accent") }}
+  </div>
+
+  <div class="grid grid-cards">
+    {% for p in rows %}
+      {{ prop_card(p, favorite_ids, user, "/me/favorites") }}
+    {% endfor %}
+  </div>
+
+  <section class="card mt3">
+    <div class="card-head">
+      <h2>Saved History</h2>
+      <span class="hint">favorites.added_at</span>
+    </div>
+    <div class="table-wrap">
+      <table class="data">
+        <thead>
+          <tr>
+            <th>Property</th><th>City</th><th class="num">Price</th>
+            <th>Status</th><th>Date Added</th><th class="num">Total Saves</th><th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in rows %}
+          <tr>
+            <td><a href="/property/{{ p.property_id }}">{{ p.title }}</a></td>
+            <td>{{ p.city_name }}</td>
+            <td class="num">{{ p.price|money }}</td>
+            <td><span class="badge {{ p.status|status_class }}">{{ p.status|status_label }}</span></td>
+            <td class="nowrap">{{ p.added_at|datefmt }}</td>
+            <td class="num" title="Total users who saved this property">{{ p.favorite_count }}</td>
+            <td class="right">
+              <form method="post" action="/property/{{ p.property_id }}/favorite"
+                    class="inline-form">
+                <input type="hidden" name="redirect_to" value="/me/favorites">
+                <button class="btn btn-sm btn-danger-ghost">Remove</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="card-foot">
+      Removing from favorites runs a targeted <code>DELETE</code> matching both halves of the composite primary key.
+    </div>
+  </section>
+{% else %}
+  <div class="card">
+    {{ empty("You have not saved any properties yet.", "&#10084;") }}
+    <div class="card-foot center">
+      <a href="/listings" class="btn">Browse Properties</a>
+    </div>
+  </div>
+{% endif %}
+{% endblock %}

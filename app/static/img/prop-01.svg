@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#7fb2e5"/><stop offset="100%" stop-color="#d8ecfb"/>
+    </linearGradient>
+    <linearGradient id="wall" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#fdfbf6"/><stop offset="100%" stop-color="#e6ddcd"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#sky)"/>
+  <circle cx="660" cy="110" r="46" fill="#ffe9a8" opacity=".9"/>
+  <path d="M0 470h800v130H0z" fill="#8fc06a"/>
+  <path d="M0 470c120-24 240 14 400 4s280-34 400-10v20H0z" fill="#79ae57"/>
+  <!-- house body -->
+  <rect x="210" y="290" width="380" height="190" fill="url(#wall)"/>
+  <path d="M180 300 400 150l220 150z" fill="#a5522f"/>
+  <path d="M400 150l220 150h-40L400 186z" fill="#8c4326"/>
+  <!-- door -->
+  <rect x="370" y="378" width="62" height="102" rx="3" fill="#5b3a24"/>
+  <circle cx="420" cy="430" r="4" fill="#e8c667"/>
+  <!-- windows -->
+  <g fill="#bfe0f5" stroke="#fff" stroke-width="6">
+    <rect x="252" y="336" width="82" height="72"/><rect x="466" y="336" width="82" height="72"/>
+  </g>
+  <path d="M293 336v72M252 372h82M507 336v72M466 372h82" stroke="#fff" stroke-width="6"/>
+  <!-- chimney + trees -->
+  <rect x="520" y="196" width="34" height="70" fill="#8c4326"/>
+  <circle cx="120" cy="420" r="54" fill="#4f8f45"/><rect x="112" y="440" width="16" height="42" fill="#6b4a2f"/>
+  <circle cx="690" cy="432" r="42" fill="#4f8f45"/><rect x="683" y="450" width="14" height="34" fill="#6b4a2f"/>
+</svg>

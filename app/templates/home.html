@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% from "_macros.html" import prop_card, stat, bar, empty %}
+{% block title %}Find Your Dream Property{% endblock %}
+
+{% block hero %}
+<section class="hero">
+  <div class="wrap">
+    <h1>Find Your Dream Property in Bangladesh</h1>
+    <p class="lede">
+      Explore {{ kpis.total_properties|num }} properties across {{ city_stats|length }} cities managed by {{ kpis.total_agents|num }}
+      licensed agents. Search by city, price, area, or amenities.
+    </p>
+
+    <form class="searchbar" method="get" action="/listings">
+      <div>
+        <label for="q">Keyword</label>
+        <input id="q" type="search" name="keyword" placeholder="Pool, Gulshan, Flat, Duplex...">
+      </div>
+      <div>
+        <label for="city">City</label>
+        <select id="city" name="city_id">
+          <option value="">All Cities</option>
+          {% for c in cities %}
+            <option value="{{ c.city_id }}">{{ c.city_name }} ({{ c.state }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="type">Property Type</label>
+        <select id="type" name="type_id">
+          <option value="">All Types</option>
+          {% for t in types %}
+            <option value="{{ t.type_id }}">{{ t.type_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="offer">Offer</label>
+        <select id="offer" name="listing_type">
+          <option value="">Sale or Rent</option>
+          <option value="SALE">For Sale</option>
+          <option value="RENT">For Rent</option>
+        </select>
+      </div>
+      <button class="btn btn-accent">Search</button>
+    </form>
+
+    <div class="hero-stats">
+      <div><b>{{ kpis.available_properties|num }}</b><span>Available</span></div>
+      <div><b>{{ kpis.avg_price|money_short }}</b><span>Avg Price</span></div>
+      <div><b>{{ kpis.total_transactions|num }}</b><span>Closed Deals</span></div>
+      <div><b>{{ kpis.total_revenue|money_short }}</b><span>Total Sales</span></div>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block content %}
+
+<!-- ------------------------------------------------------------ featured -->
+<div class="page-head">
+  <div>
+    <h1>Featured Properties</h1>
+    <p class="sub">Hand-picked listings with <code>featured = 'Y'</code> currently available on the market.</p>
+  </div>
+  <a href="/listings?featured=1" class="btn btn-ghost">View All</a>
+</div>
+
+{% if featured %}
+  <div class="grid grid-cards">
+    {% for p in featured %}
+      {{ prop_card(p, favorite_ids, user, "/") }}
+    {% endfor %}
+  </div>
+{% else %}
+  {{ empty("No featured properties available at the moment.") }}
+{% endif %}
+
+<!-- ------------------------------------------------- cities + top agents -->
+<div class="grid grid-2 mt3">
+  <section class="card">
+    <div class="card-head">
+      <h2>Properties by City</h2>
+      <span class="hint">v_city_stats</span>
+    </div>
+    <div class="card-body">
+      {% set peak = city_stats|map(attribute='property_count')|map('int')|list|max if city_stats else 0 %}
+      <div class="bars">
+        {% for c in city_stats %}
+          {{ bar(c.city_name ~ ' (' ~ c.state ~ ')', c.property_count|int, peak,
+                 c.property_count|int) }}
+        {% endfor %}
+      </div>
+    </div>
+    <div class="card-foot">
+      Derived from the <b>v_city_stats</b> view using <code>LEFT JOIN + GROUP BY</code>.
+      <a href="/market">View Full Market Report &rarr;</a>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>Top Performing Agents</h2>
+      <span class="hint">RANK() OVER (ORDER BY sales)</span>
+    </div>
+    <div class="card-body stack">
+      {% for a in top_agents %}
+        <div class="agent-box">
+          <span class="avatar">{{ a.agent_name[:1]|upper }}</span>
+          <div style="min-width:0">
+            <div><a href="/agents/{{ a.agent_id }}"><b>{{ a.agent_name }}</b></a></div>
+            <div class="small muted">
+              {{ a.agency_name or 'Independent Agent' }} &middot;
+              <span class="stars">{{ a.avg_rating|stars }}</span>
+              {% if a.avg_rating %}<span class="faint">{{ a.avg_rating }}</span>{% endif %}
+            </div>
+          </div>
+          <span class="spacer"></span>
+          <div class="right">
+            <div class="strong">{{ a.total_sales_value|money_short }}</div>
+            <div class="tiny faint">Rank #{{ a.sales_rank }}</div>
+          </div>
+        </div>
+      {% else %}
+        {{ empty("No agents found.") }}
+      {% endfor %}
+    </div>
+    <div class="card-foot"><a href="/agents">View All Agents &rarr;</a></div>
+  </section>
+</div>
+
+<!-- ----------------------------------------------------------- newest ---- -->
+<div class="page-head mt3">
+  <div>
+    <h1>Latest Listings</h1>
+    <p class="sub">Recently added properties available in Bangladesh.</p>
+  </div>
+  <a href="/listings?sort=newest" class="btn btn-ghost">Browse All Properties</a>
+</div>
+
+{% if newest %}
+  <div class="grid grid-cards">
+    {% for p in newest %}
+      {{ prop_card(p, favorite_ids, user, "/") }}
+    {% endfor %}
+  </div>
+{% else %}
+  {{ empty("No properties listed yet.") }}
+{% endif %}
+
+<!-- ------------------------------------------------------- project note -- -->
+<section class="card mt3">
+  <div class="card-head">
+    <h2>About EstateDB Project</h2>
+    <span class="hint">PostgreSQL &middot; Render</span>
+  </div>
+  <div class="card-body">
+    <p class="mb2">
+      EstateDB is a database-centric university project. Every page runs handwritten SQL queries directly against a PostgreSQL schema without any ORM.
+    </p>
+    <div class="grid grid-4">
+      {{ stat("Tables", "14", "PK / FK / CHECK constraints") }}
+      {{ stat("Triggers", "9", "Audit & business logic", "accent") }}
+      {{ stat("Views", "4", "Listings, agents, cities, sales", "good") }}
+      {{ stat("Routines", "6", "Stored procedures & functions", "warn") }}
+    </div>
+  </div>
+  <div class="card-foot">
+    {% if user %}
+      To inspect live execution and results for every SQL technique, visit the
+      <a href="/database">SQL Showcase</a> page.
+    {% else %}
+      To view SQL query execution and database features,
+      <a href="/login">Sign In</a> with a demo account.
+    {% endif %}
+  </div>
+</section>
+
+{% endblock %}

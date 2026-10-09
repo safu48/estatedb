@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="sky6" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#20344b"/><stop offset="100%" stop-color="#8ba4bd"/>
+    </linearGradient>
+    <linearGradient id="curtain" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#5f93b8"/><stop offset="45%" stop-color="#a7cde2"/><stop offset="100%" stop-color="#4d7fa4"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#sky6)"/>
+  <!-- commercial glass block -->
+  <rect x="180" y="80" width="440" height="480" fill="#3d4d5c"/>
+  <rect x="200" y="100" width="400" height="420" fill="url(#curtain)"/>
+  <g stroke="#3d4d5c" stroke-width="6" opacity=".9">
+    <path d="M300 100v420M400 100v420M500 100v420"/>
+    <path d="M200 170h400M200 240h400M200 310h400M200 380h400M200 450h400"/>
+  </g>
+  <!-- lit offices -->
+  <g fill="#ffdf9e" opacity=".85">
+    <rect x="206" y="176" width="88" height="58"/><rect x="406" y="246" width="88" height="58"/>
+    <rect x="306" y="316" width="88" height="58"/><rect x="506" y="386" width="88" height="58"/>
+    <rect x="206" y="386" width="88" height="58"/>
+  </g>
+  <!-- canopy and plaza -->
+  <rect x="150" y="520" width="500" height="14" fill="#2f3d4a"/>
+  <rect x="340" y="534" width="120" height="46" fill="#20303d"/>
+  <rect x="0" y="556" width="800" height="44" fill="#69747f"/>
+  <rect x="80" y="470" width="60" height="86" fill="#4a5865"/>
+  <rect x="660" y="450" width="70" height="106" fill="#4a5865"/>
+</svg>

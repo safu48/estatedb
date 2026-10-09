@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Error Occurred{% endblock %}
+{% block main_class %}wrap page narrow{% endblock %}
+
+{% block content %}
+<div class="auth-card">
+  <div class="card">
+    <div class="card-head">
+      <h1 class="mb0">Request Could Not Be Completed</h1>
+    </div>
+    <div class="card-body">
+      <p class="lede mb2">
+        {{ message or "An unexpected error occurred." }}
+      </p>
+
+      {% if message and ('Duplicate' in message or 'constraint' in message or 'SQLSTATE' in message) %}
+        <p class="small muted">
+          The above message was generated directly by the PostgreSQL engine, signaling an integrity constraint or trigger validation rule.
+        </p>
+      {% endif %}
+
+      <div class="row-tight mt2">
+        <a href="/" class="btn">Back to Home</a>
+        <a href="/listings" class="btn btn-ghost">Browse Properties</a>
+        {% if user %}
+          <a href="/database" class="btn btn-ghost">SQL Showcase</a>
+        {% endif %}
+      </div>
+    </div>
+    <div class="card-foot">
+      Database error exceptions are formatted cleanly via <code>db_message()</code>.
+    </div>
+  </div>
+</div>
+{% endblock %}

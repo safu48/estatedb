@@ -1,0 +1,425 @@
+{% extends "base.html" %}
+{% from "_macros.html" import empty, stat, bar %}
+{% block title %}Admin Console &middot; EstateDB{% endblock %}
+
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Admin Dashboard</h1>
+    <p class="sub">
+      A comprehensive demonstration of analytical SQL techniques: aggregates, window functions,
+      <code>ROLLUP</code>, month-over-month growth comparisons, and trigger-generated audit trails.
+    </p>
+  </div>
+  <nav class="tabs">
+    <a class="on" href="/admin">Dashboard</a>
+    <a href="/admin/users">Users</a>
+    <a href="/admin/properties">Properties</a>
+    <a href="/admin/transactions">Transactions</a>
+    <a href="/admin/inquiries">Inquiries</a>
+    <a href="/admin/lookups">Lookups</a>
+    <a href="/admin/audit">Audit Log</a>
+  </nav>
+</div>
+
+<!-- ============================================================ headline -->
+<div class="grid grid-4 mb2">
+  {{ stat("Total Properties", kpis.total_properties|num,
+          kpis.available_properties ~ " currently available") }}
+  {{ stat("Total Revenue", kpis.total_revenue|money_short,
+          kpis.total_transactions ~ " closed deals", "good") }}
+  {{ stat("Total Commission", kpis.total_commission|money_short,
+          "Earned across agents", "accent") }}
+  {{ stat("Average Price", kpis.avg_price|money_short,
+          "Overall portfolio average", "warn") }}
+</div>
+<div class="grid grid-4 mb3">
+  {{ stat("Total Users", kpis.total_users|num, "Including " ~ kpis.total_agents ~ " agents") }}
+  {{ stat("Total Inquiries", kpis.total_inquiries|num,
+          kpis.new_inquiries ~ " new leads",
+          "bad" if kpis.new_inquiries else "") }}
+  {{ stat("Sold / Rented",
+          (kpis.sold_properties|int + kpis.rented_properties|int)|num,
+          kpis.pending_properties ~ " pending contract") }}
+  {{ stat("Avg Days on Market", kpis.avg_days_on_market|num,
+          "Active listings average") }}
+</div>
+
+<!-- ============================================== monthly sales (analytic) -->
+<section class="card mb3">
+  <div class="card-head">
+    <h2>Monthly Sales &amp; Revenue</h2>
+    <span class="hint">LAG() and SUM() OVER (ORDER BY ...)</span>
+  </div>
+
+  {% if monthly %}
+    <div class="table-wrap">
+      <table class="data">
+        <thead>
+          <tr>
+            <th>Month</th><th class="num">Deals</th><th class="num">Revenue</th>
+            <th class="num">MoM Change</th><th class="num">Running Total</th>
+            <th class="num">Commission</th><th class="num">Avg Deal</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for m in monthly %}
+          <tr>
+            <td><b>{{ m.sales_month }}</b></td>
+            <td class="num">{{ m.deal_count }}</td>
+            <td class="num">{{ m.revenue|money }}</td>
+            <td class="num">
+              {% if m.prev_revenue is none %}
+                <span class="faint">--</span>
+              {% elif m.revenue_change is none or m.revenue_change|float == 0 %}
+                <span class="faint">No change</span>
+              {% elif m.revenue_change|float > 0 %}
+                <span class="delta-up">&#9650; {{ m.revenue_change|abs|money }}{% if m.revenue_change_pct is not none %} ({{ m.revenue_change_pct|abs }}%){% endif %}</span>
+              {% else %}
+                <span class="delta-down">&#9660; {{ m.revenue_change|abs|money }}{% if m.revenue_change_pct is not none %} ({{ m.revenue_change_pct|abs }}%){% endif %}</span>
+              {% endif %}
+            </td>
+            <td class="num">{{ m.running_revenue|money }}</td>
+            <td class="num">{{ m.commission|money }}</td>
+            <td class="num">{{ m.avg_deal|money }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="card-foot">
+      Three window functions in a single query: <code>LAG()</code> for MoM comparison, percentage calculation, and <code>SUM() OVER (ORDER BY month)</code> for cumulative running revenue.
+    </div>
+  {% else %}
+    <div class="card-body">{{ empty("No closed transactions recorded yet.") }}</div>
+  {% endif %}
+</section>
+
+<!-- ==================================================== rollup + listings -->
+<div class="grid grid-2 mb3">
+  <section class="card">
+    <div class="card-head">
+      <h2>Revenue by City &amp; Listing Type</h2>
+      <span class="hint">GROUP BY ROLLUP</span>
+    </div>
+    {% if rollup %}
+      <div class="table-wrap">
+        <table class="data">
+          <thead>
+            <tr><th>City</th><th>Type</th><th class="num">Deals</th>
+                <th class="num">Revenue</th><th class="num">Commission</th></tr>
+          </thead>
+          <tbody>
+            {% for r in rollup %}
+              <tr class="{{ 'total-row' if r.is_type_total|int == 1 or r.is_city_total|int == 1 }}">
+                <td>
+                  {% if r.is_type_total|int == 1 %}
+                    <b>Grand Total</b>
+                  {% else %}
+                    {{ r.city_name }}
+                  {% endif %}
+                </td>
+                <td>
+                  {% if r.is_type_total|int == 1 %}
+                    <span class="faint">All cities &amp; types</span>
+                  {% elif r.is_city_total|int == 1 %}
+                    <b>City Subtotal</b>
+                  {% else %}
+                    <span class="badge {{ r.txn_type|status_class }}">{{ 'For Sale' if r.txn_type == 'SALE' else 'For Rent' }}</span>
+                  {% endif %}
+                </td>
+                <td class="num">{{ r.deal_count }}</td>
+                <td class="num">{{ r.revenue|money }}</td>
+                <td class="num">{{ r.commission|money }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="card-foot">
+        Multi-level aggregation in one statement: <code>ROLLUP(city, type)</code> computes city subtotals and the grand total.
+      </div>
+    {% else %}
+      <div class="card-body">{{ empty("No transaction revenue to aggregate yet.") }}</div>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>New Listings Added per Month</h2>
+      <span class="hint">DATE_FORMAT(created_at, '%Y-%m')</span>
+    </div>
+    <div class="card-body">
+      {% if listings_by_month %}
+        {% set peak = listings_by_month|map(attribute='listing_count')|map('int')|list|max %}
+        <div class="cols">
+          {% for m in listings_by_month %}
+            <div class="col">
+              <span class="amt">{{ m.listing_count }}</span>
+              <span class="stem"
+                    style="height: {{ ((m.listing_count|int) / peak * 100)|round|int if peak else 0 }}%"></span>
+              <span class="cap">{{ m.listing_month[-2:] }}/{{ m.listing_month[2:4] }}</span>
+            </div>
+          {% endfor %}
+        </div>
+        <table class="data mt3">
+          <thead><tr><th>Month</th><th class="num">Listings</th>
+                     <th class="num">Average Price</th></tr></thead>
+          <tbody>
+            {% for m in listings_by_month %}
+              <tr>
+                <td>{{ m.listing_month }}</td>
+                <td class="num">{{ m.listing_count }}</td>
+                <td class="num">{{ m.avg_price|money }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        {{ empty("No listings added in the past 12 months.") }}
+      {% endif %}
+    </div>
+    <div class="card-foot">
+      Listings grouped chronologically by month over the past 12 months.
+    </div>
+  </section>
+</div>
+
+<!-- ================================================ leaderboard + statuses -->
+<div class="grid grid-2 mb3">
+  <section class="card">
+    <div class="card-head">
+      <h2>Top Agents Leaderboard</h2>
+      <span class="hint">RANK() vs DENSE_RANK()</span>
+    </div>
+    <div class="table-wrap">
+      <table class="data">
+        <thead>
+          <tr><th class="num">#</th><th>Agent</th><th class="num">Listings</th>
+              <th class="num">Volume</th><th class="num">Commission</th>
+              <th>Rating</th><th class="num">Rating Rank</th></tr>
+        </thead>
+        <tbody>
+          {% for a in leaderboard %}
+          <tr>
+            <td class="num"><b>{{ a.sales_rank }}</b></td>
+            <td>
+              <a href="/agents/{{ a.agent_id }}">{{ a.agent_name }}</a>
+              <div class="tiny faint">{{ a.agency_name or 'Independent Agent' }}</div>
+            </td>
+            <td class="num">{{ a.total_listings }}</td>
+            <td class="num">{{ a.total_sales_value|money }}</td>
+            <td class="num">{{ a.total_commission|money }}</td>
+            <td class="nowrap"><span class="stars">{{ a.avg_rating|stars }}</span></td>
+            <td class="num">{{ a.rating_rank }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="7">{{ empty("No agents registered.") }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="card-foot">
+      Two ranking functions side-by-side: <code>RANK()</code> leaves gaps on ties (1, 2, 2, 4); <code>DENSE_RANK()</code> assigns consecutive ranks without gaps (1, 2, 2, 3).
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <h2>Inventory by Type &amp; Status</h2>
+      <span class="hint">Conditional aggregates</span>
+    </div>
+    <div class="table-wrap">
+      <table class="data">
+        <thead>
+          <tr><th>Type</th><th class="num">Available</th><th class="num">Pending</th>
+              <th class="num">Sold</th><th class="num">Rented</th>
+              <th class="num">Total</th></tr>
+        </thead>
+        <tbody>
+          {% for r in status_by_type %}
+          <tr>
+            <td>{{ r.type_name }}</td>
+            <td class="num">{{ r.available }}</td>
+            <td class="num">{{ r.pending }}</td>
+            <td class="num">{{ r.sold }}</td>
+            <td class="num">{{ r.rented }}</td>
+            <td class="num"><b>{{ r.total }}</b></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        {% if status_by_type %}
+          <tfoot>
+            <tr class="total-row">
+              <td>Total</td>
+              <td class="num">{{ status_by_type|sum(attribute='available') }}</td>
+              <td class="num">{{ status_by_type|sum(attribute='pending') }}</td>
+              <td class="num">{{ status_by_type|sum(attribute='sold') }}</td>
+              <td class="num">{{ status_by_type|sum(attribute='rented') }}</td>
+              <td class="num">{{ status_by_type|sum(attribute='total') }}</td>
+            </tr>
+          </tfoot>
+        {% endif %}
+      </table>
+    </div>
+    <div class="card-foot">
+      Cross-tab pivot table generated dynamically using <code>SUM(CASE WHEN ... THEN 1 ELSE 0 END)</code>.
+    </div>
+  </section>
+</div>
+
+<!-- ====================================================== bands + cities -->
+<div class="grid grid-3 mb3">
+  <section class="card">
+    <div class="card-head"><h3>Price Bands</h3></div>
+    <div class="card-body">
+      {% if price_bands %}
+        {% set peak = price_bands|map(attribute='property_count')|map('int')|list|max %}
+        <div class="bars">
+          {% for b in price_bands %}
+            {{ bar(b.price_band, b.property_count|int, peak, b.property_count|int) }}
+          {% endfor %}
+        </div>
+      {% else %}
+        {{ empty("No listings found.") }}
+      {% endif %}
+    </div>
+    <div class="card-foot">CASE expression used in both SELECT and GROUP BY.</div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h3>Busiest Cities</h3>
+      <span class="hint">HAVING</span></div>
+    <div class="table-wrap">
+      <table class="data">
+        <thead><tr><th>City</th><th class="num">Listings</th>
+                   <th class="num">Avg Price</th></tr></thead>
+        <tbody>
+          {% for c in busy_cities %}
+            <tr>
+              <td>{{ c.city_name }} <span class="faint">{{ c.state }}</span></td>
+              <td class="num">{{ c.listing_count }}</td>
+              <td class="num">{{ c.avg_price|money_short }}</td>
+            </tr>
+          {% else %}
+            <tr><td colspan="3">{{ empty("No data available.") }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="card-foot">Filtered post-aggregation with <code>HAVING COUNT(*) &gt;= 2</code>.</div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h3>Highest Priced Property per City</h3>
+      <span class="hint">ROW_NUMBER()</span></div>
+    <div class="table-wrap">
+      <table class="data">
+        <thead><tr><th>City</th><th>Property</th><th class="num">Price</th></tr></thead>
+        <tbody>
+          {% for r in priciest %}
+            <tr>
+              <td>{{ r.city_name }}</td>
+              <td><a href="/property/{{ r.property_id }}">
+                  {{ r.title|truncate_words(4) }}</a></td>
+              <td class="num">{{ r.price|money_short }}</td>
+            </tr>
+          {% else %}
+            <tr><td colspan="3">{{ empty("No data available.") }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="card-foot">Partitioned by city to select top-ranked property.</div>
+  </section>
+</div>
+
+<!-- ================================================= feed + roles + audit -->
+<div class="grid grid-3">
+  <section class="card">
+    <div class="card-head">
+      <h2>Recent Activity</h2>
+      <span class="hint">UNION ALL</span>
+    </div>
+    <div class="card-body">
+      {% if feed %}
+        <div class="feed">
+          {% for f in feed %}
+            <div class="feed-item">
+              <span class="badge {{ f.activity_type|status_class }}">
+                {{ f.activity_type|title }}
+              </span>
+              <div style="min-width:0">
+                <div class="small"><b>{{ f.actor }}</b> &middot; {{ f.subject }}</div>
+                <div class="tiny faint">
+                  {{ f.detail }} &middot; {{ f.activity_date|datefmt('%d %b, %H:%M') }}
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        {{ empty("No recent activity recorded.") }}
+      {% endif %}
+    </div>
+    <div class="card-foot">
+      Three event streams (new listings, customer inquiries, closed deals) merged into a chronological feed via <code>UNION ALL</code>.
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h3>Users by Role</h3></div>
+    <div class="table-wrap">
+      <table class="data">
+        <thead><tr><th>Role</th><th class="num">Total Users</th>
+                   <th class="num">Active</th></tr></thead>
+        <tbody>
+          {% for r in role_counts %}
+            <tr>
+              <td><span class="badge {{ r.role_name|status_class }}">
+                  {{ r.role_name }}</span></td>
+              <td class="num">{{ r.user_count }}</td>
+              <td class="num">{{ r.active_count or 0 }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="card-foot">
+      <code>LEFT JOIN</code> on <code>roles</code> preserves roles with 0 users.
+      <a href="/admin/users">Manage Users &rarr;</a>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h3>Audit Trail</h3>
+      <span class="hint">Trigger-recorded events</span></div>
+    <div class="card-body">
+      {% if audit_counts %}
+        {% set peak = audit_counts|map(attribute='event_count')|map('int')|list|max %}
+        <div class="bars">
+          {% for a in audit_counts %}
+            {{ bar(a.action|title, a.event_count|int, peak, a.event_count|int,
+                   'good' if a.action == 'INSERT' else
+                   ('accent' if a.action == 'UPDATE' else 'bad')) }}
+          {% endfor %}
+        </div>
+      {% else %}
+        {{ empty("No audit log entries recorded yet.") }}
+      {% endif %}
+      <div class="stack mt3">
+        {% for f in most_favorited[:3] %}
+          <div class="between small">
+            <a href="/property/{{ f.property_id }}">{{ f.title|truncate_words(4) }}</a>
+            <span class="chip">&#10084; {{ f.save_count }}</span>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="card-foot">
+      Every entry created automatically by database triggers.
+      <a href="/admin/audit">View Audit Log &rarr;</a>
+    </div>
+  </section>
+</div>
+{% endblock %}
